@@ -6,49 +6,68 @@ import { MonoError } from '../core';
 import { WireMessage, MessageHeader, OpCode, nextRequestId } from './wireMessage';
 
 /**
- * OP_MSG flags
+ * OP_MSG 标志位
+ * // EN: OP_MSG flags
  */
 export enum OpMsgFlags {
+    /** 存在校验和 // EN: Checksum present */
     ChecksumPresent = 0x0001,
+    /** 还有更多数据 // EN: More to come */
     MoreToCome = 0x0002,
+    /** 允许 exhaust // EN: Exhaust allowed */
     ExhaustAllowed = 0x00010000,
 }
 
 /**
- * OP_MSG section types
+ * OP_MSG 节类型
+ * // EN: OP_MSG section types
  */
 export enum SectionKind {
+    /** 消息体 // EN: Body */
     Body = 0,
+    /** 文档序列 // EN: Document sequence */
     DocumentSequence = 1,
 }
 
 /**
- * Document sequence section
+ * 文档序列节
+ * // EN: Document sequence section
  */
 export interface DocumentSequence {
+    /** 标识符 // EN: Identifier */
     identifier: string;
+    /** 文档列表 // EN: Documents */
     documents: BSONDocument[];
 }
 
 /**
- * Parsed OP_MSG message
+ * 解析后的 OP_MSG 消息
+ * // EN: Parsed OP_MSG message
  */
 export interface OpMsgMessage {
+    /** 标志位 // EN: Flags */
     flags: number;
+    /** 消息体 // EN: Body */
     body: BSONDocument | null;
+    /** 文档序列 // EN: Sequences */
     sequences: DocumentSequence[];
+    /** 校验和 // EN: Checksum */
     checksum?: number;
 }
 
 /**
- * OP_MSG parser and builder (aligned with Go version)
+ * OP_MSG 解析器和构建器（与 Go 版本对齐）
+ * // EN: OP_MSG parser and builder (aligned with Go version)
  */
 export class OpMsgParser {
+    /** BSON 编码器 // EN: BSON encoder */
     private static encoder = new BSONEncoder();
+    /** BSON 解码器 // EN: BSON decoder */
     private static decoder = new BSONDecoder();
 
     /**
-     * Parse OP_MSG body
+     * 解析 OP_MSG 消息体
+     * // EN: Parse OP_MSG body
      */
     static parse(body: Buffer, fullMessage?: Buffer): OpMsgMessage {
         if (body.length < 5) {
@@ -57,7 +76,8 @@ export class OpMsgParser {
 
         const flags = DataEndian.readUInt32LE(body, 0);
 
-        // Check for unknown required flags (bits 0-15)
+        // 检查未知的必需标志位（0-15 位）
+        // EN: Check for unknown required flags (bits 0-15)
         const requiredBitsMask = 0xFFFF;
         const knownRequiredBits = OpMsgFlags.ChecksumPresent | OpMsgFlags.MoreToCome;
         const unknownRequired = (flags & requiredBitsMask) & ~knownRequiredBits;
@@ -68,7 +88,7 @@ export class OpMsgParser {
         let endPos = body.length;
         let checksum: number | undefined;
 
-        // Check for checksum
+        // 检查校验和 // EN: Check for checksum
         const hasChecksum = (flags & OpMsgFlags.ChecksumPresent) !== 0;
         if (hasChecksum) {
             if (body.length < 9) {
@@ -77,7 +97,7 @@ export class OpMsgParser {
             checksum = DataEndian.readUInt32LE(body, body.length - 4);
             endPos -= 4;
 
-            // Verify checksum if full message provided
+            // 如果提供了完整消息，验证校验和 // EN: Verify checksum if full message provided
             if (fullMessage) {
                 if (fullMessage.length < 20) {
                     throw MonoError.protocolError('full message too short for checksum verification');
@@ -125,7 +145,7 @@ export class OpMsgParser {
                     const seqEnd = pos + seqLen;
                     pos += 4;
 
-                    // Read identifier (cstring)
+                    // 读取标识符（C 字符串）// EN: Read identifier (cstring)
                     let identEnd = pos;
                     while (identEnd < seqEnd && body[identEnd] !== 0) {
                         identEnd++;
@@ -136,7 +156,7 @@ export class OpMsgParser {
                     const identifier = body.toString('utf8', pos, identEnd);
                     pos = identEnd + 1;
 
-                    // Read documents
+                    // 读取文档列表 // EN: Read documents
                     const documents: BSONDocument[] = [];
                     while (pos < seqEnd) {
                         if (pos + 4 > seqEnd) {
@@ -164,20 +184,22 @@ export class OpMsgParser {
     }
 
     /**
-     * Build OP_MSG reply
+     * 构建 OP_MSG 回复
+     * // EN: Build OP_MSG reply
      */
     static buildReply(requestId: number, responseDoc: BSONDocument): WireMessage {
         const bsonData = this.encoder.encode(responseDoc);
 
-        // Build body: flags (4) + section kind (1) + bson
+        // 构建消息体: 标志位(4) + 节类型(1) + BSON
+        // EN: Build body: flags (4) + section kind (1) + bson
         const bodyLen = 4 + 1 + bsonData.length;
         const body = Buffer.alloc(bodyLen);
 
-        // flags = 0
+        // 标志位 = 0 // EN: flags = 0
         DataEndian.writeUInt32LE(body, 0, 0);
-        // section kind = body
+        // 节类型 = 消息体 // EN: section kind = body
         body[4] = SectionKind.Body;
-        // bson document
+        // BSON 文档 // EN: bson document
         bsonData.copy(body, 5);
 
         const header: MessageHeader = {
@@ -191,7 +213,8 @@ export class OpMsgParser {
     }
 
     /**
-     * CRC32C checksum (simplified implementation)
+     * CRC32C 校验和（简化实现）
+     * // EN: CRC32C checksum (simplified implementation)
      */
     private static crc32c(data: Buffer): number {
         let crc = 0xFFFFFFFF;

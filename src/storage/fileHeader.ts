@@ -4,30 +4,32 @@ import { FILE_MAGIC, FILE_VERSION, PAGE_SIZE, FILE_HEADER_SIZE, INVALID_PAGE_ID 
 import { DataEndian } from './dataEndian';
 
 /**
- * Database file header (64 bytes, aligned with Go version)
+ * 数据库文件头（64 字节，与 Go 版本对齐）
+ * // EN: Database file header (64 bytes, aligned with Go version)
  *
- * Layout:
- * - magic: 4 bytes (offset 0) - "MONO" = 0x4D4F4E4F
- * - version: 2 bytes (offset 4)
- * - pageSize: 2 bytes (offset 6)
- * - pageCount: 4 bytes (offset 8)
- * - freeListHead: 4 bytes (offset 12)
- * - metaPageId: 4 bytes (offset 16)
- * - catalogPageId: 4 bytes (offset 20)
- * - createTime: 8 bytes (offset 24) - Unix milliseconds
- * - modifyTime: 8 bytes (offset 32) - Unix milliseconds
- * - reserved: 24 bytes (offset 40-63)
+ * 布局 // EN: Layout:
+ * - magic: 4 字节 (偏移 0) - "MONO" = 0x4D4F4E4F
+ * - version: 2 字节 (偏移 4)
+ * - pageSize: 2 字节 (偏移 6)
+ * - pageCount: 4 字节 (偏移 8)
+ * - freeListHead: 4 字节 (偏移 12)
+ * - metaPageId: 4 字节 (偏移 16)
+ * - catalogPageId: 4 字节 (偏移 20)
+ * - createTime: 8 字节 (偏移 24) - Unix 毫秒
+ * - modifyTime: 8 字节 (偏移 32) - Unix 毫秒
+ * - reserved: 24 字节 (偏移 40-63)
  */
 export class FileHeader {
+    /** 头数据缓冲区 // EN: Header data buffer */
     private data: Buffer;
 
     constructor(data?: Buffer) {
         if (data) {
-            // Accept both 64-byte header and full page
+            // 接受 64 字节头或完整页 // EN: Accept both 64-byte header and full page
             if (data.length === FILE_HEADER_SIZE) {
                 this.data = data;
             } else if (data.length === PAGE_SIZE) {
-                // Extract header from full page (for backward compatibility)
+                // 从完整页提取头（向后兼容）// EN: Extract header from full page (for backward compatibility)
                 this.data = Buffer.alloc(FILE_HEADER_SIZE);
                 data.copy(this.data, 0, 0, FILE_HEADER_SIZE);
             } else {
@@ -39,7 +41,8 @@ export class FileHeader {
     }
 
     /**
-     * Create a new file header
+     * 创建新的文件头
+     * // EN: Create a new file header
      */
     static create(): FileHeader {
         const header = new FileHeader();
@@ -47,7 +50,7 @@ export class FileHeader {
         header.setMagic(FILE_MAGIC);
         header.setVersion(FILE_VERSION);
         header.setPageSize(PAGE_SIZE);
-        header.setPageCount(1); // At least one meta page
+        header.setPageCount(1); // 至少一个元数据页 // EN: At least one meta page
         header.setFreeListHead(INVALID_PAGE_ID);
         header.setMetaPageId(INVALID_PAGE_ID);
         header.setCatalogPageId(INVALID_PAGE_ID);
@@ -57,7 +60,8 @@ export class FileHeader {
     }
 
     /**
-     * Parse header from buffer
+     * 从缓冲区解析头
+     * // EN: Parse header from buffer
      */
     static fromBuffer(buf: Buffer): FileHeader {
         const header = new FileHeader(Buffer.from(buf));
@@ -68,20 +72,22 @@ export class FileHeader {
     }
 
     /**
-     * Get raw buffer (64 bytes)
+     * 获取原始缓冲区（64 字节）
+     * // EN: Get raw buffer (64 bytes)
      */
     toBuffer(): Buffer {
         return this.data;
     }
 
     /**
-     * Get a copy of raw buffer
+     * 获取原始缓冲区的副本
+     * // EN: Get a copy of raw buffer
      */
     toBufferCopy(): Buffer {
         return Buffer.from(this.data);
     }
 
-    // Field accessors (aligned with Go version)
+    // 字段访问器（与 Go 版本对齐）// EN: Field accessors (aligned with Go version)
     getMagic(): number {
         return DataEndian.readUInt32LE(this.data, 0);
     }
@@ -155,14 +161,16 @@ export class FileHeader {
     }
 
     /**
-     * Update modify time to current time
+     * 更新修改时间为当前时间
+     * // EN: Update modify time to current time
      */
     touch(): void {
         this.setModifyTime(BigInt(Date.now()));
     }
 
     /**
-     * Verify header validity
+     * 验证头有效性
+     * // EN: Verify header validity
      */
     verify(): boolean {
         if (this.getMagic() !== FILE_MAGIC) {
@@ -177,7 +185,7 @@ export class FileHeader {
         return true;
     }
 
-    // Legacy getters for backward compatibility
+    // 遗留访问器（向后兼容）// EN: Legacy getters for backward compatibility
     getRootPageId(): number {
         return this.getCatalogPageId();
     }
@@ -187,11 +195,12 @@ export class FileHeader {
     }
 
     getWalLSN(): bigint {
-        // WAL LSN is now managed by WAL, return 0 for compatibility
+        // WAL LSN 现在由 WAL 管理，返回 0 以保持兼容性
+        // EN: WAL LSN is now managed by WAL, return 0 for compatibility
         return BigInt(0);
     }
 
     setWalLSN(_lsn: bigint): void {
-        // No-op for backward compatibility
+        // 空操作，向后兼容 // EN: No-op for backward compatibility
     }
 }

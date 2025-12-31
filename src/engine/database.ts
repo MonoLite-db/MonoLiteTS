@@ -10,42 +10,64 @@ import { SessionManager, extractCommandContext, isInTransaction, CommandContext 
 import { CursorManager } from './cursorManager';
 
 /**
- * Database configuration
+ * 数据库配置选项
+ * // EN: Database configuration options
  */
 export interface DatabaseOptions {
+    /** 数据库文件路径 // EN: Database file path */
     filePath: string;
+    /** 缓存大小（可选） // EN: Cache size (optional) */
     cacheSize?: number;
 }
 
 /**
- * Database statistics
+ * 数据库统计信息
+ * // EN: Database statistics
  */
 export interface DatabaseStats {
+    /** 集合数量 // EN: Number of collections */
     collections: number;
+    /** 文档数量 // EN: Number of documents */
     documents: number;
+    /** 数据大小 // EN: Data size */
     dataSize: number;
+    /** 存储大小 // EN: Storage size */
     storageSize: number;
+    /** 索引数量 // EN: Number of indexes */
     indexes: number;
 }
 
 /**
- * Database class (aligned with Go version)
+ * 数据库类（与 Go 版本对齐）
+ * // EN: Database class (aligned with Go version)
  *
- * Manages collections, catalog, and provides command interface
+ * 管理集合、目录，并提供命令接口
+ * // EN: Manages collections, catalog, and provides command interface
  */
 export class Database {
+    /** 数据库文件路径 // EN: Database file path */
     private filePath: string;
+    /** 页面管理器 // EN: Page manager */
     private pager: Pager | null = null;
+    /** 集合目录 // EN: Collection catalog */
     private catalog: Map<string, Collection> = new Map();
+    /** 目录 B+ 树 // EN: Catalog B+ tree */
     private catalogTree: BTree | null = null;
+    /** BSON 编码器 // EN: BSON encoder */
     private encoder: BSONEncoder;
+    /** BSON 解码器 // EN: BSON decoder */
     private decoder: BSONDecoder;
+    /** 数据库是否已关闭 // EN: Whether database is closed */
     private closed: boolean = false;
-    
-    // Managers (aligned with Go/Swift)
+
+    // 管理器（与 Go/Swift 对齐）// EN: Managers (aligned with Go/Swift)
+    /** 事务管理器 // EN: Transaction manager */
     txnManager: TransactionManager | null = null;
+    /** 会话管理器 // EN: Session manager */
     private sessionManager: SessionManager | null = null;
+    /** 游标管理器 // EN: Cursor manager */
     private cursorManager: CursorManager | null = null;
+    /** 数据库启动时间 // EN: Database start time */
     private startTime: Date;
 
     private constructor(filePath: string) {
@@ -56,7 +78,8 @@ export class Database {
     }
 
     /**
-     * Open or create a database
+     * 打开或创建数据库
+     * // EN: Open or create a database
      */
     static async open(options: DatabaseOptions): Promise<Database> {
         const db = new Database(options.filePath);
@@ -64,10 +87,10 @@ export class Database {
             cacheSize: options.cacheSize,
         });
 
-        // Initialize or load catalog
+        // 初始化或加载目录 // EN: Initialize or load catalog
         await db.initCatalog();
 
-        // Initialize managers (aligned with Go/Swift)
+        // 初始化管理器（与 Go/Swift 对齐）// EN: Initialize managers (aligned with Go/Swift)
         db.txnManager = new TransactionManager(db);
         db.sessionManager = new SessionManager(db);
         db.cursorManager = new CursorManager();
@@ -77,12 +100,13 @@ export class Database {
     }
 
     /**
-     * Close the database
+     * 关闭数据库
+     * // EN: Close the database
      */
     async close(): Promise<void> {
         if (this.closed) return;
 
-        // Close managers
+        // 关闭管理器 // EN: Close managers
         if (this.sessionManager) {
             this.sessionManager.close();
             this.sessionManager = null;
@@ -105,7 +129,8 @@ export class Database {
     }
 
     /**
-     * Flush all data to disk
+     * 将所有数据刷新到磁盘
+     * // EN: Flush all data to disk
      */
     async flush(): Promise<void> {
         if (this.pager) {
@@ -114,14 +139,16 @@ export class Database {
     }
 
     /**
-     * Get database file path
+     * 获取数据库文件路径
+     * // EN: Get database file path
      */
     getFilePath(): string {
         return this.filePath;
     }
 
     /**
-     * Get a collection (create if not exists when autoCreate is true)
+     * 获取集合（当 autoCreate 为 true 时，如果不存在则创建）
+     * // EN: Get a collection (create if not exists when autoCreate is true)
      */
     async getCollection(name: string, autoCreate: boolean = false): Promise<Collection | null> {
         let collection = this.catalog.get(name);
@@ -137,21 +164,22 @@ export class Database {
     }
 
     /**
-     * Create a new collection
+     * 创建新集合
+     * // EN: Create a new collection
      */
     async createCollection(name: string): Promise<Collection> {
-        // Validate name
+        // 验证名称 // EN: Validate name
         const validation = validateCollectionName(name);
         if (!validation.valid) {
             throw MonoError.invalidNamespace(validation.error!);
         }
 
-        // Check if exists
+        // 检查是否存在 // EN: Check if exists
         if (this.catalog.has(name)) {
             throw MonoError.invalidNamespace(`collection already exists: ${name}`);
         }
 
-        // Create collection info
+        // 创建集合信息 // EN: Create collection info
         const info: CollectionInfo = {
             name,
             dataPageId: 0,
@@ -162,14 +190,14 @@ export class Database {
             updatedAt: new Date(),
         };
 
-        // Create collection instance
+        // 创建集合实例 // EN: Create collection instance
         const collection = new Collection(name, this.pager!, info);
         await collection.init();
 
-        // Update info with allocated page IDs
+        // 更新分配的页面 ID // EN: Update info with allocated page IDs
         const updatedInfo = collection.getInfo();
 
-        // Store in catalog
+        // 存储到目录 // EN: Store in catalog
         this.catalog.set(name, collection);
         await this.saveCatalogEntry(name, updatedInfo);
 
@@ -178,7 +206,8 @@ export class Database {
     }
 
     /**
-     * Drop a collection
+     * 删除集合
+     * // EN: Drop a collection
      */
     async dropCollection(name: string): Promise<boolean> {
         const collection = this.catalog.get(name);
@@ -186,7 +215,7 @@ export class Database {
             return false;
         }
 
-        // Remove from catalog
+        // 从目录中移除 // EN: Remove from catalog
         this.catalog.delete(name);
         await this.deleteCatalogEntry(name);
 
@@ -195,14 +224,16 @@ export class Database {
     }
 
     /**
-     * List all collection names
+     * 列出所有集合名称
+     * // EN: List all collection names
      */
     listCollections(): string[] {
         return Array.from(this.catalog.keys());
     }
 
     /**
-     * Get database statistics
+     * 获取数据库统计信息
+     * // EN: Get database statistics
      */
     async getStats(): Promise<DatabaseStats> {
         let totalDocs = 0;
@@ -224,7 +255,8 @@ export class Database {
     }
 
     /**
-     * Run a database command
+     * 执行数据库命令
+     * // EN: Run a database command
      */
     async runCommand(cmd: BSONDocument): Promise<BSONDocument> {
         const cmdName = Object.keys(cmd)[0];
@@ -328,8 +360,9 @@ export class Database {
         }
     }
 
-    // Command implementations
+    // 命令实现 // EN: Command implementations
 
+    /** hello 命令 // EN: hello command */
     private helloCommand(): BSONDocument {
         return {
             ok: 1,
@@ -344,6 +377,7 @@ export class Database {
         };
     }
 
+    /** 构建信息命令 // EN: buildInfo command */
     private buildInfoCommand(): BSONDocument {
         return {
             ok: 1,
@@ -359,6 +393,7 @@ export class Database {
         };
     }
 
+    /** 服务器状态命令 // EN: serverStatus command */
     private serverStatusCommand(): BSONDocument {
         return {
             ok: 1,
@@ -382,6 +417,7 @@ export class Database {
         };
     }
 
+    /** 列出集合命令 // EN: listCollections command */
     private async listCollectionsCommand(cmd: BSONDocument): Promise<BSONDocument> {
         const collections: BSONDocument[] = [];
         for (const [name, collection] of this.catalog) {
@@ -407,16 +443,19 @@ export class Database {
         };
     }
 
+    /** 创建集合命令 // EN: create collection command */
     private async createCommand(name: string, cmd: BSONDocument): Promise<BSONDocument> {
         await this.createCollection(name);
         return { ok: 1 };
     }
 
+    /** 删除集合命令 // EN: drop collection command */
     private async dropCommand(name: string): Promise<BSONDocument> {
         const dropped = await this.dropCollection(name);
         return { ok: 1, dropped };
     }
 
+    /** 插入命令 // EN: insert command */
     private async insertCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName, true);
         if (!collection) {
@@ -432,6 +471,7 @@ export class Database {
         };
     }
 
+    /** 查询命令 // EN: find command */
     private async findCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -463,6 +503,7 @@ export class Database {
         };
     }
 
+    /** 更新命令 // EN: update command */
     private async updateCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -493,6 +534,7 @@ export class Database {
         };
     }
 
+    /** 删除命令 // EN: delete command */
     private async deleteCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -516,6 +558,7 @@ export class Database {
         return { ok: 1, n };
     }
 
+    /** 计数命令 // EN: count command */
     private async countCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -528,6 +571,7 @@ export class Database {
         return { ok: 1, n: count };
     }
 
+    /** 去重命令 // EN: distinct command */
     private async distinctCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -541,6 +585,7 @@ export class Database {
         return { ok: 1, values };
     }
 
+    /** 聚合命令 // EN: aggregate command */
     private async aggregateCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -554,7 +599,7 @@ export class Database {
             };
         }
 
-        // TODO: Implement full aggregation pipeline
+        // TODO: 实现完整的聚合管道 // EN: Implement full aggregation pipeline
         const pipeline = cmd.pipeline as BSONDocument[];
         let docs = await collection.find({});
 
@@ -594,20 +639,21 @@ export class Database {
         };
     }
 
+    /** 简化的过滤器匹配 // EN: Simplified filter matching */
     private matchesFilter(doc: BSONDocument, filter: BSONDocument): boolean {
-        // Simplified filter matching
         for (const [key, value] of Object.entries(filter)) {
             if (doc[key] !== value) return false;
         }
         return true;
     }
 
+    /** 文档排序 // EN: Sort documents */
     private sortDocs(docs: BSONDocument[], sort: BSONDocument): BSONDocument[] {
         return [...docs].sort((a, b) => {
             for (const [key, dir] of Object.entries(sort)) {
                 const aVal = a[key];
                 const bVal = b[key];
-                // Handle null/undefined comparison
+                // 处理 null/undefined 比较 // EN: Handle null/undefined comparison
                 if (aVal === undefined || aVal === null) {
                     if (bVal === undefined || bVal === null) continue;
                     return (dir as number) > 0 ? -1 : 1;
@@ -622,6 +668,7 @@ export class Database {
         });
     }
 
+    /** 文档投影 // EN: Project document */
     private projectDoc(doc: BSONDocument, projection: BSONDocument): BSONDocument {
         const result: BSONDocument = {};
         for (const [key, value] of Object.entries(projection)) {
@@ -632,6 +679,7 @@ export class Database {
         return result;
     }
 
+    /** 查找并修改命令 // EN: findAndModify command */
     private async findAndModifyCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const query = cmd.query as BSONDocument || {};
         const update = cmd.update as BSONDocument;
@@ -640,7 +688,8 @@ export class Database {
         const upsert = cmd.upsert as boolean;
         const sort = cmd.sort as BSONDocument;
 
-        // Get or create collection based on upsert flag (aligned with Go/Swift)
+        // 根据 upsert 标志获取或创建集合（与 Go/Swift 对齐）
+        // EN: Get or create collection based on upsert flag (aligned with Go/Swift)
         let collection: Collection | null;
         if (upsert) {
             collection = await this.getCollection(collName, true);
@@ -649,7 +698,8 @@ export class Database {
         }
 
         if (!collection) {
-            // Collection doesn't exist and no upsert - return empty result
+            // 集合不存在且没有 upsert - 返回空结果
+            // EN: Collection doesn't exist and no upsert - return empty result
             return {
                 lastErrorObject: { n: 0, updatedExisting: false },
                 value: null,
@@ -657,7 +707,8 @@ export class Database {
             };
         }
 
-        // Find target document with optional sort
+        // 查找目标文档（支持可选排序）
+        // EN: Find target document with optional sort
         let target: BSONDocument | null;
         if (sort && Object.keys(sort).length > 0) {
             const results = await collection.find({ filter: query, sort, limit: 1 });
@@ -666,7 +717,7 @@ export class Database {
             target = await collection.findOne(query);
         }
 
-        // Handle remove operation
+        // 处理删除操作 // EN: Handle remove operation
         if (remove) {
             if (!target) {
                 return {
@@ -675,7 +726,8 @@ export class Database {
                     ok: 1,
                 };
             }
-            // Delete by _id to ensure we hit the correct document
+            // 通过 _id 删除以确保命中正确的文档
+            // EN: Delete by _id to ensure we hit the correct document
             await collection.deleteOne({ _id: target._id });
             return {
                 lastErrorObject: { n: 1, updatedExisting: false },
@@ -684,13 +736,13 @@ export class Database {
             };
         }
 
-        // Handle update operation
+        // 处理更新操作 // EN: Handle update operation
         if (!update) {
             throw MonoError.badValue('findAndModify requires update when remove is false');
         }
 
         if (target) {
-            // Document found - update it
+            // 找到文档 - 更新它 // EN: Document found - update it
             await collection.updateOne({ _id: target._id }, update, false);
             const value = returnNew ? await collection.findById(target._id) : target;
             return {
@@ -700,7 +752,7 @@ export class Database {
             };
         }
 
-        // Document not found
+        // 未找到文档 // EN: Document not found
         if (!upsert) {
             return {
                 lastErrorObject: { n: 0, updatedExisting: false },
@@ -709,7 +761,7 @@ export class Database {
             };
         }
 
-        // Upsert path
+        // Upsert 路径 // EN: Upsert path
         const res = await collection.updateOne(query, update, true);
         const upsertedId = res.upsertedId;
         const value = returnNew && upsertedId ? await collection.findById(upsertedId) : null;
@@ -726,6 +778,7 @@ export class Database {
         };
     }
 
+    /** 创建索引命令 // EN: createIndexes command */
     private async createIndexesCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName, true);
         if (!collection) {
@@ -748,7 +801,8 @@ export class Database {
             createdNames.push(name);
         }
 
-        // Save updated catalog with index metadata
+        // 保存更新后的目录（包含索引元数据）
+        // EN: Save updated catalog with index metadata
         await this.saveCatalogEntry(collName, collection.getInfo());
 
         return {
@@ -760,13 +814,14 @@ export class Database {
         };
     }
 
+    /** 列出索引命令 // EN: listIndexes command */
     private async listIndexesCommand(collName: string): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
             throw MonoError.namespaceNotFound(collName);
         }
 
-        // Get actual indexes from collection
+        // 获取集合的实际索引 // EN: Get actual indexes from collection
         const indexes = collection.listIndexes();
 
         return {
@@ -779,6 +834,7 @@ export class Database {
         };
     }
 
+    /** 删除索引命令 // EN: dropIndexes command */
     private async dropIndexesCommand(collName: string, cmd: BSONDocument): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -789,7 +845,7 @@ export class Database {
         const nIndexesWas = collection.listIndexes().length;
 
         if (indexName === '*') {
-            // Drop all indexes except _id
+            // 删除除 _id 外的所有索引 // EN: Drop all indexes except _id
             const indexes = collection.listIndexes();
             for (const idx of indexes) {
                 if (idx.name !== '_id_') {
@@ -800,7 +856,7 @@ export class Database {
             await collection.dropIndex(indexName);
         }
 
-        // Save updated catalog
+        // 保存更新后的目录 // EN: Save updated catalog
         await this.saveCatalogEntry(collName, collection.getInfo());
 
         return {
@@ -809,6 +865,7 @@ export class Database {
         };
     }
 
+    /** 数据库统计命令 // EN: dbStats command */
     private async dbStatsCommand(): Promise<BSONDocument> {
         const stats = await this.getStats();
         return {
@@ -823,6 +880,7 @@ export class Database {
         };
     }
 
+    /** 集合统计命令 // EN: collStats command */
     private async collStatsCommand(collName: string): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
@@ -842,13 +900,15 @@ export class Database {
         };
     }
 
+    /** 验证命令 // EN: validate command */
     private async validateCommand(collName: string): Promise<BSONDocument> {
         const collection = await this.getCollection(collName);
         if (!collection) {
             throw MonoError.namespaceNotFound(collName);
         }
 
-        // Use Collection's validate method for full integrity check
+        // 使用集合的 validate 方法进行完整性检查
+        // EN: Use Collection's validate method for full integrity check
         const result = await collection.validate();
 
         return {
@@ -862,6 +922,7 @@ export class Database {
         };
     }
 
+    /** 获取更多游标数据命令 // EN: getMore command */
     private async getMoreCommand(cmd: BSONDocument): Promise<BSONDocument> {
         if (!this.cursorManager) {
             throw MonoError.internalError('cursor manager not initialized');
@@ -887,6 +948,7 @@ export class Database {
         }
     }
 
+    /** 终止游标命令 // EN: killCursors command */
     private async killCursorsCommand(cmd: BSONDocument): Promise<BSONDocument> {
         if (!this.cursorManager) {
             throw MonoError.internalError('cursor manager not initialized');
@@ -904,8 +966,10 @@ export class Database {
         };
     }
 
-    // Session/Transaction commands (aligned with Go/Swift)
+    // 会话/事务命令（与 Go/Swift 对齐）
+    // EN: Session/Transaction commands (aligned with Go/Swift)
 
+    /** 结束会话命令 // EN: endSessions command */
     private endSessionsCommand(cmd: BSONDocument): BSONDocument {
         if (!this.sessionManager) {
             return { ok: 1 };
@@ -917,7 +981,7 @@ export class Database {
                 try {
                     this.sessionManager.endSession(lsid);
                 } catch {
-                    // Ignore errors for non-existent sessions
+                    // 忽略不存在会话的错误 // EN: Ignore errors for non-existent sessions
                 }
             }
         }
@@ -925,6 +989,7 @@ export class Database {
         return { ok: 1 };
     }
 
+    /** 刷新会话命令 // EN: refreshSessions command */
     private refreshSessionsCommand(cmd: BSONDocument): BSONDocument {
         if (!this.sessionManager) {
             return { ok: 1 };
@@ -936,7 +1001,7 @@ export class Database {
                 try {
                     this.sessionManager.refreshSession(lsid);
                 } catch {
-                    // Ignore errors
+                    // 忽略错误 // EN: Ignore errors
                 }
             }
         }
@@ -944,12 +1009,13 @@ export class Database {
         return { ok: 1 };
     }
 
+    /** 开始事务命令 // EN: startTransaction command */
     private async startTransactionCommand(cmd: BSONDocument): Promise<BSONDocument> {
         if (!this.sessionManager || !this.txnManager) {
             throw MonoError.internalError('session/transaction manager not initialized');
         }
 
-        // Extract session from lsid
+        // 从 lsid 提取会话 // EN: Extract session from lsid
         const lsid = cmd.lsid as BSONDocument | undefined;
         if (!lsid) {
             throw MonoError.badValue('startTransaction requires lsid');
@@ -962,7 +1028,7 @@ export class Database {
 
         const txnNum = typeof txnNumber === 'number' ? BigInt(txnNumber) : txnNumber;
 
-        // Extract options
+        // 提取选项 // EN: Extract options
         const readConcern = (cmd.readConcern as BSONDocument)?.level as string || 'local';
         const writeConcern = (cmd.writeConcern as BSONDocument)?.w as string || 'majority';
 
@@ -972,6 +1038,7 @@ export class Database {
         return { ok: 1 };
     }
 
+    /** 提交事务命令 // EN: commitTransaction command */
     private async commitTransactionCommand(cmd: BSONDocument): Promise<BSONDocument> {
         if (!this.sessionManager || !this.txnManager) {
             throw MonoError.internalError('session/transaction manager not initialized');
@@ -995,6 +1062,7 @@ export class Database {
         return { ok: 1 };
     }
 
+    /** 中止事务命令 // EN: abortTransaction command */
     private async abortTransactionCommand(cmd: BSONDocument): Promise<BSONDocument> {
         if (!this.sessionManager || !this.txnManager) {
             throw MonoError.internalError('session/transaction manager not initialized');
@@ -1018,8 +1086,10 @@ export class Database {
         return { ok: 1 };
     }
 
-    // Explain command (aligned with Go/Swift)
+    // 解释命令（与 Go/Swift 对齐）
+    // EN: Explain command (aligned with Go/Swift)
 
+    /** explain 命令 // EN: explain command */
     private async explainCommand(cmd: BSONDocument): Promise<BSONDocument> {
         const explainCmd = cmd.explain as BSONDocument;
         if (!explainCmd || typeof explainCmd !== 'object') {
@@ -1038,7 +1108,7 @@ export class Database {
         const info = collection.getInfo();
         const indexes = collection.listIndexes();
 
-        // Build query plan based on command type
+        // 根据命令类型构建查询计划 // EN: Build query plan based on command type
         let queryPlan: BSONDocument = {
             namespace: `test.${collName}`,
             indexFilterSet: false,
@@ -1058,7 +1128,7 @@ export class Database {
                 rejectedPlans: [],
             };
 
-            // Check if any index can be used
+            // 检查是否可以使用索引 // EN: Check if any index can be used
             for (const idx of indexes) {
                 const idxKeys = idx.key as BSONDocument;
                 const firstKey = Object.keys(idxKeys)[0];
@@ -1105,7 +1175,7 @@ export class Database {
             },
         };
 
-        // Add execution stats if requested
+        // 如果请求，添加执行统计 // EN: Add execution stats if requested
         if (verbosity === 'executionStats' || verbosity === 'allPlansExecution') {
             result.executionStats = {
                 executionSuccess: true,
@@ -1116,7 +1186,7 @@ export class Database {
             };
         }
 
-        // Add server info
+        // 添加服务器信息 // EN: Add server info
         if (verbosity === 'allPlansExecution') {
             result.serverInfo = {
                 host: 'localhost',
@@ -1128,28 +1198,30 @@ export class Database {
         return result;
     }
 
-    // Catalog management
+    // 目录管理 // EN: Catalog management
 
+    /** 初始化目录 // EN: Initialize catalog */
     private async initCatalog(): Promise<void> {
         const rootPageId = this.pager!.getRootPageId();
 
         if (rootPageId === 0) {
-            // Create new catalog tree
+            // 创建新的目录树 // EN: Create new catalog tree
             this.catalogTree = await BTree.create(this.pager!);
             this.pager!.setRootPageId(this.catalogTree.getRootPageId());
         } else {
-            // Load existing catalog
+            // 加载现有目录 // EN: Load existing catalog
             this.catalogTree = new BTree(this.pager!, rootPageId);
             await this.loadCatalog();
         }
     }
 
+    /** 加载目录 // EN: Load catalog */
     private async loadCatalog(): Promise<void> {
         const entries = await this.catalogTree!.getAll();
 
         for (const encoded of entries) {
             const decoded = this.decoder.decode(encoded);
-            // Reconstruct CollectionInfo with proper typing
+            // 重建集合信息（带正确的类型）// EN: Reconstruct CollectionInfo with proper typing
             const info: CollectionInfo = {
                 name: decoded.name as string,
                 dataPageId: decoded.dataPageId as number,
@@ -1168,12 +1240,14 @@ export class Database {
         logger.debug('Catalog loaded', { collections: this.catalog.size });
     }
 
+    /** 保存目录条目 // EN: Save catalog entry */
     private async saveCatalogEntry(name: string, info: CollectionInfo): Promise<void> {
         const key = Buffer.from(name, 'utf8');
         const encoded = this.encoder.encode(info as any);
         await this.catalogTree!.insert(key, encoded);
     }
 
+    /** 删除目录条目 // EN: Delete catalog entry */
     private async deleteCatalogEntry(name: string): Promise<void> {
         const key = Buffer.from(name, 'utf8');
         await this.catalogTree!.delete(key);

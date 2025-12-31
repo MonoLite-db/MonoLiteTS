@@ -1,7 +1,12 @@
 // Created by Yanjunhui
-// MonoLite - A single-file embeddable document database compatible with MongoDB Wire Protocol
 
-// Storage layer
+/**
+ * MonoLite - 兼容 MongoDB Wire 协议的单文件嵌入式文档数据库
+ * EN: MonoLite - A single-file embeddable document database compatible with MongoDB Wire Protocol
+ */
+
+// 存储层
+// EN: Storage layer
 export {
     PAGE_SIZE,
     INVALID_PAGE_ID,
@@ -15,10 +20,12 @@ export {
     FileHeader,
 } from './storage';
 
-// BSON layer
+// BSON 层
+// EN: BSON layer
 export * from './bson';
 
-// Core layer
+// 核心层
+// EN: Core layer
 export {
     ErrorCode,
     ErrorCodes,
@@ -35,8 +42,10 @@ export {
     logger,
 } from './core';
 
-// Engine layer
+// 引擎层
+// EN: Engine layer
 export * from './engine';
 
-// Protocol layer
+// 协议层
+// EN: Protocol layer
 export * from './protocol';

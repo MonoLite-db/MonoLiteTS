@@ -8,53 +8,71 @@ import { FileHeader } from './fileHeader';
 import { WAL, WALRecordType, MetaUpdateType } from './wal';
 
 /**
- * Page cache entry
+ * 页面缓存条目
+ * // EN: Page cache entry
  */
 interface CacheEntry {
+    /** 页面 // EN: Page */
     page: SlottedPage;
+    /** 是否脏页 // EN: Whether dirty */
     dirty: boolean;
+    /** 最后访问时间 // EN: Last access time */
     lastAccess: number;
 }
 
 /**
- * Pager options
+ * Pager 选项
+ * // EN: Pager options
  */
 export interface PagerOptions {
+    /** 缓存大小 // EN: Cache size */
     cacheSize?: number;
+    /** 是否启用 WAL // EN: Whether to enable WAL */
     enableWAL?: boolean;
 }
 
 /**
- * Pager - Page manager for database file (aligned with Go version)
+ * Pager - 数据库文件的页面管理器（与 Go 版本对齐）
+ * // EN: Pager - Page manager for database file (aligned with Go version)
  *
- * File layout:
+ * 文件布局 // EN: File layout:
  * +--------------------+
- * | File Header (64B)  |  <- offset 0
+ * | 文件头 (64B)        |  <- 偏移 0 // EN: File Header (64B) <- offset 0
  * +--------------------+
- * | Page 0 (4KB)       |  <- offset FILE_HEADER_SIZE (64)
+ * | 页面 0 (4KB)        |  <- 偏移 64 // EN: Page 0 (4KB) <- offset FILE_HEADER_SIZE (64)
  * +--------------------+
- * | Page 1 (4KB)       |  <- offset 64 + 4096
+ * | 页面 1 (4KB)        |  <- 偏移 64 + 4096 // EN: Page 1 (4KB) <- offset 64 + 4096
  * +--------------------+
  * | ...                |
  * +--------------------+
  *
- * Responsibilities:
- * - File I/O
- * - Page allocation and deallocation
- * - Page cache management
- * - Free list management
+ * 职责 // EN: Responsibilities:
+ * - 文件 I/O // EN: File I/O
+ * - 页面分配和释放 // EN: Page allocation and deallocation
+ * - 页面缓存管理 // EN: Page cache management
+ * - 空闲列表管理 // EN: Free list management
  */
 export class Pager {
+    /** 文件路径 // EN: File path */
     private filePath: string;
+    /** 文件描述符 // EN: File descriptor */
     private fd: number = -1;
+    /** 文件头 // EN: File header */
     private header: FileHeader;
+    /** 空闲页列表 // EN: Free pages list */
     private freePages: number[] = [];
+    /** 页面缓存 // EN: Page cache */
     private cache: Map<number, CacheEntry> = new Map();
+    /** 最大缓存大小 // EN: Max cache size */
     private maxCacheSize: number;
+    /** 是否已关闭 // EN: Whether closed */
     private closed: boolean = false;
-    // WAL support (aligned with Go version)
+    // WAL 支持（与 Go 版本对齐）// EN: WAL support (aligned with Go version)
+    /** WAL 实例 // EN: WAL instance */
     private wal: WAL | null = null;
+    /** 是否启用 WAL // EN: Whether WAL is enabled */
     private walEnabled: boolean = true;
+    /** 页面 LSN 映射 // EN: Page LSN map */
     private pageLSN: Map<number, bigint> = new Map();
 
     private constructor(filePath: string, header: FileHeader, maxCacheSize: number, enableWAL: boolean) {
@@ -65,14 +83,16 @@ export class Pager {
     }
 
     /**
-     * Calculate page offset in file (aligned with Go)
+     * 计算页面在文件中的偏移量（与 Go 对齐）
+     * // EN: Calculate page offset in file (aligned with Go)
      */
     private pageOffset(pageId: number): number {
         return FILE_HEADER_SIZE + pageId * PAGE_SIZE;
     }
 
     /**
-     * Open or create a database file
+     * 打开或创建数据库文件
+     * // EN: Open or create a database file
      */
     static async open(filePath: string, options?: PagerOptions): Promise<Pager> {
         const maxCacheSize = options?.cacheSize ?? DEFAULT_CACHE_SIZE;

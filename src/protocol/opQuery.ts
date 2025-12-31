@@ -6,26 +6,37 @@ import { MonoError } from '../core';
 import { WireMessage, MessageHeader, OpCode, nextRequestId } from './wireMessage';
 
 /**
- * Parsed OP_QUERY message
+ * 解析后的 OP_QUERY 消息
+ * // EN: Parsed OP_QUERY message
  */
 export interface OpQueryMessage {
+    /** 标志位 // EN: Flags */
     flags: number;
+    /** 完整集合名 // EN: Full collection name */
     fullCollectionName: string;
+    /** 跳过数量 // EN: Number to skip */
     numberToSkip: number;
+    /** 返回数量 // EN: Number to return */
     numberToReturn: number;
+    /** 查询文档 // EN: Query document */
     query: BSONDocument;
+    /** 返回字段选择器 // EN: Return fields selector */
     returnFieldsSelector?: BSONDocument;
 }
 
 /**
- * OP_QUERY parser and OP_REPLY builder (aligned with Go version)
+ * OP_QUERY 解析器（与 Go 版本对齐）
+ * // EN: OP_QUERY parser (aligned with Go version)
  */
 export class OpQueryParser {
+    /** BSON 编码器 // EN: BSON encoder */
     private static encoder = new BSONEncoder();
+    /** BSON 解码器 // EN: BSON decoder */
     private static decoder = new BSONDecoder();
 
     /**
-     * Parse OP_QUERY body
+     * 解析 OP_QUERY 消息体
+     * // EN: Parse OP_QUERY body
      */
     static parse(body: Buffer): OpQueryMessage {
         if (body.length < 12) {
@@ -35,7 +46,7 @@ export class OpQueryParser {
         const flags = DataEndian.readInt32LE(body, 0);
         let pos = 4;
 
-        // Read fullCollectionName (cstring)
+        // 读取完整集合名（C 字符串）// EN: Read fullCollectionName (cstring)
         let nameEnd = pos;
         while (nameEnd < body.length && body[nameEnd] !== 0) {
             nameEnd++;
@@ -54,7 +65,7 @@ export class OpQueryParser {
         const numberToReturn = DataEndian.readInt32LE(body, pos);
         pos += 4;
 
-        // Read query document
+        // 读取查询文档 // EN: Read query document
         if (pos + 4 > body.length) {
             throw MonoError.protocolError('OP_QUERY missing query document');
         }
@@ -65,7 +76,7 @@ export class OpQueryParser {
         const query = this.decoder.decode(body.subarray(pos, pos + docLen));
         pos += docLen;
 
-        // Optional returnFieldsSelector
+        // 可选的返回字段选择器 // EN: Optional returnFieldsSelector
         let returnFieldsSelector: BSONDocument | undefined;
         if (pos + 4 <= body.length) {
             const selLen = DataEndian.readInt32LE(body, pos);
@@ -86,16 +97,19 @@ export class OpQueryParser {
 }
 
 /**
- * OP_REPLY builder
+ * OP_REPLY 构建器
+ * // EN: OP_REPLY builder
  */
 export class OpReplyBuilder {
+    /** BSON 编码器 // EN: BSON encoder */
     private static encoder = new BSONEncoder();
 
     /**
-     * Build OP_REPLY message
+     * 构建 OP_REPLY 消息
+     * // EN: Build OP_REPLY message
      */
     static buildReply(requestId: number, documents: BSONDocument[]): WireMessage {
-        // Encode all documents
+        // 编码所有文档 // EN: Encode all documents
         const docsBytes: Buffer[] = [];
         let totalDocsLen = 0;
         for (const doc of documents) {
@@ -104,29 +118,30 @@ export class OpReplyBuilder {
             totalDocsLen += encoded.length;
         }
 
-        // Build body: responseFlags(4) + cursorId(8) + startingFrom(4) + numberReturned(4) + documents
+        // 构建消息体: 响应标志(4) + 游标ID(8) + 起始位置(4) + 返回数量(4) + 文档
+        // EN: Build body: responseFlags(4) + cursorId(8) + startingFrom(4) + numberReturned(4) + documents
         const bodyLen = 4 + 8 + 4 + 4 + totalDocsLen;
         const body = Buffer.alloc(bodyLen);
 
         let pos = 0;
 
-        // responseFlags = 0
+        // 响应标志 = 0 // EN: responseFlags = 0
         DataEndian.writeUInt32LE(body, pos, 0);
         pos += 4;
 
-        // cursorId = 0
+        // 游标 ID = 0 // EN: cursorId = 0
         DataEndian.writeUInt64LE(body, pos, BigInt(0));
         pos += 8;
 
-        // startingFrom = 0
+        // 起始位置 = 0 // EN: startingFrom = 0
         DataEndian.writeUInt32LE(body, pos, 0);
         pos += 4;
 
-        // numberReturned
+        // 返回数量 // EN: numberReturned
         DataEndian.writeUInt32LE(body, pos, documents.length);
         pos += 4;
 
-        // documents
+        // 文档列表 // EN: documents
         for (const docBytes of docsBytes) {
             docBytes.copy(body, pos);
             pos += docBytes.length;

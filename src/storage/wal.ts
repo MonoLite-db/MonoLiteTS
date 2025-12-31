@@ -6,19 +6,27 @@ import { PAGE_SIZE, WAL_MAGIC, WAL_HEADER_SIZE, WAL_RECORD_HEADER_SIZE, PageType
 import { DataEndian } from './dataEndian';
 
 /**
- * WAL record types (aligned with Go version)
+ * WAL 记录类型（与 Go 版本对齐）
+ * // EN: WAL record types (aligned with Go version)
  */
 export enum WALRecordType {
-    PageWrite = 1,     // Page content write
-    AllocPage = 2,     // Page allocation
-    FreePage = 3,      // Page free
-    Commit = 4,        // Transaction commit
-    Checkpoint = 5,    // Checkpoint marker
-    MetaUpdate = 6,    // Metadata update (FileHeader fields)
+    /** 页面内容写入 // EN: Page content write */
+    PageWrite = 1,
+    /** 页面分配 // EN: Page allocation */
+    AllocPage = 2,
+    /** 页面释放 // EN: Page free */
+    FreePage = 3,
+    /** 事务提交 // EN: Transaction commit */
+    Commit = 4,
+    /** 检查点标记 // EN: Checkpoint marker */
+    Checkpoint = 5,
+    /** 元数据更新 // EN: Metadata update (FileHeader fields) */
+    MetaUpdate = 6,
 }
 
 /**
- * Metadata update types (aligned with Go version)
+ * 元数据更新类型（与 Go 版本对齐）
+ * // EN: Metadata update types (aligned with Go version)
  */
 export enum MetaUpdateType {
     FreeListHead = 1,
@@ -27,33 +35,50 @@ export enum MetaUpdateType {
 }
 
 /**
- * WAL header structure (32 bytes, aligned with Go)
+ * WAL 头结构（32 字节，与 Go 对齐）
+ * // EN: WAL header structure (32 bytes, aligned with Go)
  */
 interface WALHeader {
+    /** 魔数 // EN: Magic number */
     magic: number;          // 4 bytes
+    /** 版本 // EN: Version */
     version: number;        // 2 bytes
+    /** 保留 // EN: Reserved */
     reserved1: number;      // 2 bytes
+    /** 检查点 LSN // EN: Checkpoint LSN */
     checkpointLSN: bigint;  // 8 bytes
+    /** 文件大小 // EN: File size */
     fileSize: bigint;       // 8 bytes
+    /** 校验和 // EN: Checksum */
     checksum: number;       // 4 bytes
+    /** 保留 // EN: Reserved */
     reserved2: number;      // 4 bytes
 }
 
 /**
- * WAL record structure
+ * WAL 记录结构
+ * // EN: WAL record structure
  */
 export interface WALRecord {
+    /** 日志序列号 // EN: Log sequence number */
     lsn: bigint;
+    /** 记录类型 // EN: Record type */
     type: WALRecordType;
+    /** 标志位 // EN: Flags */
     flags: number;
+    /** 数据长度 // EN: Data length */
     dataLen: number;
+    /** 页面 ID // EN: Page ID */
     pageId: number;
+    /** 校验和 // EN: Checksum */
     checksum: number;
+    /** 数据 // EN: Data */
     data: Buffer;
 }
 
 /**
- * CRC32 implementation (aligned with Go)
+ * CRC32 实现（与 Go 对齐）
+ * // EN: CRC32 implementation (aligned with Go)
  */
 function crc32(data: Buffer): number {
     let crc = 0xFFFFFFFF;
@@ -71,32 +96,42 @@ function crc32(data: Buffer): number {
 }
 
 /**
- * Write-Ahead Log implementation (aligned with Go version)
+ * 预写日志实现（与 Go 版本对齐）
+ * // EN: Write-Ahead Log implementation (aligned with Go version)
  *
- * File layout:
- * - Header: 32 bytes
- * - Records: variable
+ * 文件布局 // EN: File layout:
+ * - 头: 32 字节 // EN: Header: 32 bytes
+ * - 记录: 可变 // EN: Records: variable
  *
- * Record format (20 bytes header + data):
- * - LSN: 8 bytes
- * - Type: 1 byte
- * - Flags: 1 byte
- * - DataLen: 2 bytes
- * - PageId: 4 bytes
- * - Checksum: 4 bytes
- * - Data: variable
+ * 记录格式（20 字节头 + 数据）// EN: Record format (20 bytes header + data):
+ * - LSN: 8 字节 // EN: 8 bytes
+ * - Type: 1 字节 // EN: 1 byte
+ * - Flags: 1 字节 // EN: 1 byte
+ * - DataLen: 2 字节 // EN: 2 bytes
+ * - PageId: 4 字节 // EN: 4 bytes
+ * - Checksum: 4 字节 // EN: 4 bytes
+ * - Data: 可变 // EN: variable
  */
 export class WAL {
+    /** 文件路径 // EN: File path */
     private filePath: string;
+    /** 文件描述符 // EN: File descriptor */
     private fd: number = -1;
+    /** WAL 头 // EN: WAL header */
     private header: WALHeader;
+    /** 当前 LSN // EN: Current LSN */
     private currentLSN: bigint = BigInt(0);
+    /** 写入偏移量 // EN: Write offset */
     private writeOffset: bigint = BigInt(WAL_HEADER_SIZE);
+    /** 写入缓冲区 // EN: Write buffer */
     private writeBuffer: Buffer;
+    /** 写入位置 // EN: Write position */
     private writePos: number = 0;
+    /** 是否已关闭 // EN: Whether closed */
     private closed: boolean = false;
 
-    private static readonly BUFFER_SIZE = 64 * 1024; // 64KB write buffer
+    /** 缓冲区大小（64KB）// EN: Buffer size (64KB) */
+    private static readonly BUFFER_SIZE = 64 * 1024;
 
     private constructor(filePath: string) {
         this.filePath = filePath;

@@ -4,42 +4,48 @@ import { PAGE_SIZE, PageType, PAGE_HEADER_SIZE, MAX_PAGE_DATA, SLOT_SIZE, SLOT_F
 import { DataEndian } from './dataEndian';
 
 /**
- * Slot entry in SlottedPage (aligned with Go version)
+ * SlottedPage 中的槽条目（与 Go 版本对齐）
+ * // EN: Slot entry in SlottedPage (aligned with Go version)
  */
 export interface Slot {
-    offset: number;  // Offset from page data start
-    length: number;  // Data length
-    flags: number;   // Flags (e.g., deleted)
+    /** 从页面数据起始位置的偏移量 // EN: Offset from page data start */
+    offset: number;
+    /** 数据长度 // EN: Data length */
+    length: number;
+    /** 标志位（如已删除）// EN: Flags (e.g., deleted) */
+    flags: number;
 }
 
 /**
- * SlottedPage implementation (aligned with Go version)
+ * SlottedPage 实现（与 Go 版本对齐）
+ * // EN: SlottedPage implementation (aligned with Go version)
  *
- * Page layout:
+ * 页面布局 // EN: Page layout:
  * +------------------+
- * | Header (24 bytes)|
+ * | 头部 (24 字节)    |  // EN: Header (24 bytes)
  * +------------------+
- * | Slot directory   |
- * | (grows down)     |
+ * | 槽目录           |  // EN: Slot directory
+ * | (向下增长)        |  // EN: (grows down)
  * +------------------+
- * |   Free space     |
+ * |   空闲空间        |  // EN: Free space
  * +------------------+
- * | Data area        |
- * | (grows up)       |
+ * | 数据区           |  // EN: Data area
+ * | (向上增长)        |  // EN: (grows up)
  * +------------------+
  *
- * Header layout (24 bytes, aligned with Go):
- * - pageId: 4 bytes (offset 0)
- * - pageType: 1 byte (offset 4)
- * - flags: 1 byte (offset 5)
- * - itemCount: 2 bytes (offset 6)
- * - freeSpace: 2 bytes (offset 8)
- * - nextPageId: 4 bytes (offset 10)
- * - prevPageId: 4 bytes (offset 14)
- * - checksum: 4 bytes (offset 18)
- * - reserved: 2 bytes (offset 22)
+ * 头部布局（24 字节，与 Go 对齐）// EN: Header layout (24 bytes, aligned with Go):
+ * - pageId: 4 字节 (偏移 0)
+ * - pageType: 1 字节 (偏移 4)
+ * - flags: 1 字节 (偏移 5)
+ * - itemCount: 2 字节 (偏移 6)
+ * - freeSpace: 2 字节 (偏移 8)
+ * - nextPageId: 4 字节 (偏移 10)
+ * - prevPageId: 4 字节 (偏移 14)
+ * - checksum: 4 字节 (偏移 18)
+ * - reserved: 2 字节 (偏移 22)
  */
 export class SlottedPage {
+    /** 页面数据 // EN: Page data */
     private data: Buffer;
 
     constructor(data?: Buffer) {
@@ -54,7 +60,8 @@ export class SlottedPage {
     }
 
     /**
-     * Initialize a new empty page
+     * 初始化新的空页面
+     * // EN: Initialize a new empty page
      */
     static create(pageId: number, pageType: PageType): SlottedPage {
         const page = new SlottedPage();
@@ -70,11 +77,12 @@ export class SlottedPage {
     }
 
     /**
-     * Parse page from buffer
+     * 从缓冲区解析页面
+     * // EN: Parse page from buffer
      */
     static fromBuffer(buf: Buffer): SlottedPage {
         const page = new SlottedPage(Buffer.from(buf));
-        // Verify checksum
+        // 验证校验和 // EN: Verify checksum
         if (!page.verifyChecksum()) {
             throw new Error(`Page ${page.getPageId()} checksum mismatch`);
         }
@@ -82,7 +90,8 @@ export class SlottedPage {
     }
 
     /**
-     * Get raw buffer
+     * 获取原始缓冲区
+     * // EN: Get raw buffer
      */
     toBuffer(): Buffer {
         this.updateChecksum();
@@ -90,14 +99,15 @@ export class SlottedPage {
     }
 
     /**
-     * Get a copy of raw buffer
+     * 获取原始缓冲区的副本
+     * // EN: Get a copy of raw buffer
      */
     toBufferCopy(): Buffer {
         this.updateChecksum();
         return Buffer.from(this.data);
     }
 
-    // Header accessors (aligned with Go: 24-byte header)
+    // 头部访问器（与 Go 对齐：24 字节头）// EN: Header accessors (aligned with Go: 24-byte header)
     getPageId(): number {
         return DataEndian.readUInt32LE(this.data, 0);
     }
@@ -163,17 +173,20 @@ export class SlottedPage {
     }
 
     /**
-     * Calculate XOR checksum (aligned with Go)
-     * Checksum is calculated over data area only (after header)
+     * 计算 XOR 校验和（与 Go 对齐）
+     * 校验和仅对数据区（头之后）计算
+     * // EN: Calculate XOR checksum (aligned with Go)
+     * // EN: Checksum is calculated over data area only (after header)
      */
     calculateChecksum(): number {
         let checksum = 0;
-        // XOR all 4-byte words in data area (after header)
+        // 对数据区中所有 4 字节字进行 XOR
+        // EN: XOR all 4-byte words in data area (after header)
         for (let i = PAGE_HEADER_SIZE; i < PAGE_SIZE; i += 4) {
             if (i + 4 <= PAGE_SIZE) {
                 checksum ^= DataEndian.readUInt32LE(this.data, i);
             } else {
-                // Handle tail shorter than 4 bytes
+                // 处理小于 4 字节的尾部 // EN: Handle tail shorter than 4 bytes
                 let last = 0;
                 for (let j = i; j < PAGE_SIZE; j++) {
                     last |= this.data[j] << (8 * (j - i));
@@ -185,28 +198,32 @@ export class SlottedPage {
     }
 
     /**
-     * Update checksum in header
+     * 更新头中的校验和
+     * // EN: Update checksum in header
      */
     updateChecksum(): void {
         this.setChecksum(this.calculateChecksum());
     }
 
     /**
-     * Verify checksum
+     * 验证校验和
+     * // EN: Verify checksum
      */
     verifyChecksum(): boolean {
         return this.getChecksum() === this.calculateChecksum();
     }
 
     /**
-     * Get page data area (after header)
+     * 获取页面数据区（头之后）
+     * // EN: Get page data area (after header)
      */
     getDataArea(): Buffer {
         return this.data.subarray(PAGE_HEADER_SIZE);
     }
 
     /**
-     * Set page data area
+     * 设置页面数据区
+     * // EN: Set page data area
      */
     setDataArea(data: Buffer): void {
         if (data.length > MAX_PAGE_DATA) {
@@ -216,13 +233,14 @@ export class SlottedPage {
     }
 
     /**
-     * Get slot at index (aligned with Go: 6-byte slots)
+     * 获取指定索引的槽（与 Go 对齐：6 字节槽）
+     * // EN: Get slot at index (aligned with Go: 6-byte slots)
      */
     getSlot(index: number): Slot | null {
         if (index < 0 || index >= this.getItemCount()) {
             return null;
         }
-        // Slots are stored at the beginning of data area
+        // 槽存储在数据区开头 // EN: Slots are stored at the beginning of data area
         const slotOffset = PAGE_HEADER_SIZE + index * SLOT_SIZE;
         return {
             offset: DataEndian.readUInt16LE(this.data, slotOffset),
@@ -232,7 +250,8 @@ export class SlottedPage {
     }
 
     /**
-     * Set slot at index
+     * 设置指定索引的槽
+     * // EN: Set slot at index
      */
     private setSlot(index: number, slot: Slot): void {
         const slotOffset = PAGE_HEADER_SIZE + index * SLOT_SIZE;
@@ -242,7 +261,8 @@ export class SlottedPage {
     }
 
     /**
-     * Check if slot is deleted
+     * 检查槽是否已删除
+     * // EN: Check if slot is deleted
      */
     isSlotDeleted(index: number): boolean {
         const slot = this.getSlot(index);
@@ -251,25 +271,27 @@ export class SlottedPage {
     }
 
     /**
-     * Get data at slot index
+     * 获取指定槽索引的数据
+     * // EN: Get data at slot index
      */
     getData(index: number): Buffer | null {
         const slot = this.getSlot(index);
         if (!slot || slot.length === 0 || (slot.flags & SLOT_FLAG_DELETED)) {
             return null;
         }
-        // Offset is relative to data area start
+        // 偏移量相对于数据区起始位置 // EN: Offset is relative to data area start
         const dataStart = PAGE_HEADER_SIZE + slot.offset;
         return this.data.subarray(dataStart, dataStart + slot.length);
     }
 
     /**
-     * Calculate available space for new data
+     * 计算新数据的可用空间
+     * // EN: Calculate available space for new data
      */
     getAvailableSpace(): number {
         const itemCount = this.getItemCount();
         const slotsEnd = itemCount * SLOT_SIZE;
-        // Find minimum record offset
+        // 查找最小记录偏移量 // EN: Find minimum record offset
         let minRecordOffset = MAX_PAGE_DATA;
         for (let i = 0; i < itemCount; i++) {
             const slot = this.getSlot(i);
@@ -277,13 +299,16 @@ export class SlottedPage {
                 minRecordOffset = slot.offset;
             }
         }
-        // Available = min record offset - slots end - new slot size
+        // 可用 = 最小记录偏移 - 槽结束位置 - 新槽大小
+        // EN: Available = min record offset - slots end - new slot size
         return minRecordOffset - slotsEnd - SLOT_SIZE;
     }
 
     /**
-     * Insert data into page
-     * Returns slot index or -1 if no space
+     * 向页面插入数据
+     * 返回槽索引，如果没有空间则返回 -1
+     * // EN: Insert data into page
+     * // EN: Returns slot index or -1 if no space
      */
     insert(data: Buffer): number {
         const recordLen = data.length;
@@ -293,7 +318,7 @@ export class SlottedPage {
         const itemCount = this.getItemCount();
         const slotDirEnd = (itemCount + 1) * SLOT_SIZE;
 
-        // Find minimum record offset
+        // 查找最小记录偏移量 // EN: Find minimum record offset
         let minRecordOffset = MAX_PAGE_DATA;
         for (let i = 0; i < itemCount; i++) {
             const slot = this.getSlot(i);
@@ -302,21 +327,22 @@ export class SlottedPage {
             }
         }
 
-        // Check available space
+        // 检查可用空间 // EN: Check available space
         if (slotDirEnd + recordLen > minRecordOffset) {
             return -1;
         }
 
-        // Calculate new record offset (growing backward from end of data area)
+        // 计算新记录偏移量（从数据区末尾向后增长）
+        // EN: Calculate new record offset (growing backward from end of data area)
         const newOffset = minRecordOffset - recordLen;
 
-        // Copy data to data area
+        // 复制数据到数据区 // EN: Copy data to data area
         data.copy(this.data, PAGE_HEADER_SIZE + newOffset);
 
-        // Add slot
+        // 添加槽 // EN: Add slot
         this.setSlot(itemCount, { offset: newOffset, length: recordLen, flags: 0 });
 
-        // Update header
+        // 更新头 // EN: Update header
         this.setItemCount(itemCount + 1);
         this.setFreeSpace(minRecordOffset - slotDirEnd - recordLen);
 
@@ -324,8 +350,10 @@ export class SlottedPage {
     }
 
     /**
-     * Update data at slot index
-     * Returns true if successful
+     * 更新指定槽索引的数据
+     * 成功返回 true
+     * // EN: Update data at slot index
+     * // EN: Returns true if successful
      */
     update(index: number, data: Buffer): boolean {
         const slot = this.getSlot(index);
@@ -374,8 +402,10 @@ export class SlottedPage {
     }
 
     /**
-     * Delete data at slot index
-     * Note: Only marks slot as deleted, does not decrement itemCount
+     * 删除指定槽索引的数据
+     * 注意：仅将槽标记为已删除，不减少 itemCount
+     * // EN: Delete data at slot index
+     * // EN: Note: Only marks slot as deleted, does not decrement itemCount
      */
     delete(index: number): boolean {
         const slot = this.getSlot(index);
@@ -389,7 +419,8 @@ export class SlottedPage {
     }
 
     /**
-     * Get live record count (excluding deleted slots)
+     * 获取有效记录数（排除已删除的槽）
+     * // EN: Get live record count (excluding deleted slots)
      */
     getLiveCount(): number {
         let count = 0;
@@ -404,14 +435,16 @@ export class SlottedPage {
     }
 
     /**
-     * Compact page to reclaim fragmented space
-     * Returns mapping from old slot index to new slot index
+     * 压缩页面以回收碎片空间
+     * 返回旧槽索引到新槽索引的映射
+     * // EN: Compact page to reclaim fragmented space
+     * // EN: Returns mapping from old slot index to new slot index
      */
     compact(): Map<number, number> {
         const mapping = new Map<number, number>();
         const itemCount = this.getItemCount();
 
-        // Collect all live records with their data
+        // 收集所有有效记录及其数据 // EN: Collect all live records with their data
         const records: { data: Buffer; oldIndex: number }[] = [];
         for (let i = 0; i < itemCount; i++) {
             const slot = this.getSlot(i);
@@ -424,30 +457,30 @@ export class SlottedPage {
             }
         }
 
-        // Clear data area
+        // 清空数据区 // EN: Clear data area
         this.data.fill(0, PAGE_HEADER_SIZE);
 
-        // Rewrite records (growing backward from end)
+        // 重写记录（从末尾向后增长）// EN: Rewrite records (growing backward from end)
         let offset = MAX_PAGE_DATA;
         for (let newIndex = 0; newIndex < records.length; newIndex++) {
             const record = records[newIndex];
             const recordLen = record.data.length;
             offset -= recordLen;
 
-            // Copy data
+            // 复制数据 // EN: Copy data
             record.data.copy(this.data, PAGE_HEADER_SIZE + offset);
 
-            // Set slot
+            // 设置槽 // EN: Set slot
             this.setSlot(newIndex, { offset, length: recordLen, flags: 0 });
 
-            // Record mapping
+            // 记录映射 // EN: Record mapping
             mapping.set(record.oldIndex, newIndex);
         }
 
-        // Update header
+        // 更新头 // EN: Update header
         this.setItemCount(records.length);
 
-        // Calculate new free space
+        // 计算新的空闲空间 // EN: Calculate new free space
         let usedSpace = 0;
         for (const record of records) {
             usedSpace += record.data.length;
@@ -459,7 +492,8 @@ export class SlottedPage {
     }
 
     /**
-     * Get all items as array of buffers
+     * 获取所有项作为缓冲区数组
+     * // EN: Get all items as array of buffers
      */
     getAllItems(): Buffer[] {
         const result: Buffer[] = [];
@@ -474,15 +508,16 @@ export class SlottedPage {
     }
 
     /**
-     * Check if page is empty
+     * 检查页面是否为空
+     * // EN: Check if page is empty
      */
     isEmpty(): boolean {
         return this.getLiveCount() === 0;
     }
 
-    // Legacy methods for backward compatibility
+    // 遗留方法（向后兼容）// EN: Legacy methods for backward compatibility
     getFreeStart(): number {
-        // Find minimum record offset
+        // 查找最小记录偏移量 // EN: Find minimum record offset
         const itemCount = this.getItemCount();
         let minOffset = MAX_PAGE_DATA;
         for (let i = 0; i < itemCount; i++) {
@@ -495,6 +530,6 @@ export class SlottedPage {
     }
 
     setFreeStart(_start: number): void {
-        // No-op for backward compatibility (computed from slots)
+        // 空操作（向后兼容，从槽计算）// EN: No-op for backward compatibility (computed from slots)
     }
 }

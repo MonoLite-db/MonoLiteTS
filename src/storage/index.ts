@@ -1,5 +1,10 @@
 // Created by Yanjunhui
 
+/**
+ * Storage 模块导出
+ * EN: Storage module exports
+ */
+
 export * from './constants';
 export * from './dataEndian';
 export * from './page';

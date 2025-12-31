@@ -4,15 +4,19 @@ import { BSONDocument, BSONValue, compareBSON } from '../bson';
 import { MonoError, ErrorCodes } from '../core';
 
 /**
- * Pipeline stage interface
+ * 管道阶段接口
+ * // EN: Pipeline stage interface
  */
 export interface PipelineStage {
+    /** 执行阶段 // EN: Execute stage */
     execute(docs: BSONDocument[]): BSONDocument[];
+    /** 阶段名称 // EN: Stage name */
     name(): string;
 }
 
 /**
- * Database interface for $lookup
+ * 数据库接口（用于 $lookup）
+ * // EN: Database interface for $lookup
  */
 interface DatabaseLike {
     getCollection(name: string): CollectionLike | null;
@@ -23,10 +27,13 @@ interface CollectionLike {
 }
 
 /**
- * Aggregation Pipeline
+ * 聚合管道
+ * // EN: Aggregation Pipeline
  */
 export class Pipeline {
+    /** 阶段列表 // EN: Stages list */
     private stages: PipelineStage[];
+    /** 数据库引用 // EN: Database reference */
     private db: DatabaseLike | null;
 
     constructor(stages: PipelineStage[], db: DatabaseLike | null = null) {
@@ -35,7 +42,8 @@ export class Pipeline {
     }
 
     /**
-     * Create pipeline from stage documents
+     * 从阶段文档创建管道
+     * // EN: Create pipeline from stage documents
      */
     static create(stagesDocs: BSONDocument[], db: DatabaseLike | null = null): Pipeline {
         const stages: PipelineStage[] = [];
@@ -57,7 +65,8 @@ export class Pipeline {
     }
 
     /**
-     * Execute pipeline on documents
+     * 在文档上执行管道
+     * // EN: Execute pipeline on documents
      */
     execute(docs: BSONDocument[]): BSONDocument[] {
         let result = docs;
@@ -71,7 +80,8 @@ export class Pipeline {
 }
 
 /**
- * Create a pipeline stage
+ * 创建管道阶段
+ * // EN: Create a pipeline stage
  */
 function createStage(name: string, spec: unknown, db: DatabaseLike | null): PipelineStage {
     switch (name) {
@@ -106,9 +116,11 @@ function createStage(name: string, spec: unknown, db: DatabaseLike | null): Pipe
 }
 
 /**
- * $match stage
+ * $match 阶段
+ * // EN: $match stage
  */
 class MatchStage implements PipelineStage {
+    /** 过滤条件 // EN: Filter condition */
     private filter: BSONDocument;
 
     constructor(filter: BSONDocument) {
@@ -129,9 +141,11 @@ class MatchStage implements PipelineStage {
 }
 
 /**
- * $project stage
+ * $project 阶段
+ * // EN: $project stage
  */
 class ProjectStage implements PipelineStage {
+    /** 投影规范 // EN: Projection spec */
     private projection: BSONDocument;
 
     constructor(projection: BSONDocument) {
@@ -148,9 +162,11 @@ class ProjectStage implements PipelineStage {
 }
 
 /**
- * $sort stage
+ * $sort 阶段
+ * // EN: $sort stage
  */
 class SortStage implements PipelineStage {
+    /** 排序规范 // EN: Sort spec */
     private sortSpec: BSONDocument;
 
     constructor(sortSpec: BSONDocument) {
@@ -167,9 +183,11 @@ class SortStage implements PipelineStage {
 }
 
 /**
- * $limit stage
+ * $limit 阶段
+ * // EN: $limit stage
  */
 class LimitStage implements PipelineStage {
+    /** 限制数量 // EN: Limit count */
     private limit: number;
 
     constructor(limit: number) {
@@ -189,9 +207,11 @@ class LimitStage implements PipelineStage {
 }
 
 /**
- * $skip stage
+ * $skip 阶段
+ * // EN: $skip stage
  */
 class SkipStage implements PipelineStage {
+    /** 跳过数量 // EN: Skip count */
     private skip: number;
 
     constructor(skip: number) {
@@ -214,15 +234,19 @@ class SkipStage implements PipelineStage {
 }
 
 /**
- * Group state
+ * 分组状态
+ * // EN: Group state
  */
 interface GroupState {
+    /** 分组 ID // EN: Group ID */
     id: BSONValue;
+    /** 累积值 // EN: Accumulated values */
     values: Map<string, BSONValue[]>;
 }
 
 /**
- * $group stage
+ * $group 阶段
+ * // EN: $group stage
  */
 class GroupStage implements PipelineStage {
     private idExpr: unknown;
@@ -425,9 +449,11 @@ class GroupStage implements PipelineStage {
 }
 
 /**
- * $count stage
+ * $count 阶段
+ * // EN: $count stage
  */
 class CountStage implements PipelineStage {
+    /** 字段名 // EN: Field name */
     private field: string;
 
     constructor(field: string) {
@@ -444,10 +470,13 @@ class CountStage implements PipelineStage {
 }
 
 /**
- * $unwind stage
+ * $unwind 阶段
+ * // EN: $unwind stage
  */
 class UnwindStage implements PipelineStage {
+    /** 路径 // EN: Path */
     private path: string;
+    /** 是否保留空值和空数组 // EN: Preserve null and empty arrays */
     private preserveNullAndEmptyArrays: boolean = false;
 
     constructor(spec: unknown) {
@@ -513,9 +542,11 @@ class UnwindStage implements PipelineStage {
 }
 
 /**
- * $addFields stage
+ * $addFields 阶段
+ * // EN: $addFields stage
  */
 class AddFieldsStage implements PipelineStage {
+    /** 字段规范 // EN: Fields spec */
     private fields: BSONDocument;
 
     constructor(fields: BSONDocument) {
@@ -549,9 +580,11 @@ class AddFieldsStage implements PipelineStage {
 }
 
 /**
- * $unset stage
+ * $unset 阶段
+ * // EN: $unset stage
  */
 class UnsetStage implements PipelineStage {
+    /** 要移除的字段 // EN: Fields to remove */
     private fields: string[];
 
     constructor(spec: unknown) {
@@ -582,9 +615,11 @@ class UnsetStage implements PipelineStage {
 }
 
 /**
- * $replaceRoot stage
+ * $replaceRoot 阶段
+ * // EN: $replaceRoot stage
  */
 class ReplaceRootStage implements PipelineStage {
+    /** 新根文档表达式 // EN: New root expression */
     private newRoot: unknown;
 
     constructor(spec: BSONDocument) {
@@ -643,13 +678,19 @@ class ReplaceRootStage implements PipelineStage {
 }
 
 /**
- * $lookup stage
+ * $lookup 阶段
+ * // EN: $lookup stage
  */
 class LookupStage implements PipelineStage {
+    /** 外部集合名 // EN: Foreign collection name */
     private from: string;
+    /** 本地字段 // EN: Local field */
     private localField: string;
+    /** 外部字段 // EN: Foreign field */
     private foreignField: string;
+    /** 结果字段名 // EN: Result field name */
     private as: string;
+    /** 数据库引用 // EN: Database reference */
     private db: DatabaseLike | null;
 
     constructor(spec: BSONDocument, db: DatabaseLike | null) {
@@ -675,7 +716,7 @@ class LookupStage implements PipelineStage {
 
         const foreignColl = this.db.getCollection(this.from);
 
-        // If collection doesn't exist, return empty arrays
+        // 如果集合不存在，返回空数组 // EN: If collection doesn't exist, return empty arrays
         if (!foreignColl) {
             return docs.map((doc) => ({
                 ...doc,
@@ -704,10 +745,11 @@ class LookupStage implements PipelineStage {
     }
 }
 
-// Helper functions
+// ==================== 辅助函数 / Helper functions ====================
 
 /**
- * Get field from document (supports dot notation)
+ * 从文档获取字段（支持点符号表示法）
+ * // EN: Get field from document (supports dot notation)
  */
 function getDocField(doc: BSONDocument, path: string): unknown {
     const parts = path.split('.');
@@ -728,7 +770,8 @@ function getDocField(doc: BSONDocument, path: string): unknown {
 }
 
 /**
- * Convert to int64
+ * 转换为 int64
+ * // EN: Convert to int64
  */
 function toInt64(v: unknown): number {
     if (typeof v === 'number') {
@@ -741,7 +784,8 @@ function toInt64(v: unknown): number {
 }
 
 /**
- * Convert to float64
+ * 转换为 float64
+ * // EN: Convert to float64
  */
 function toFloat64(v: unknown): number {
     if (typeof v === 'number') {
@@ -754,14 +798,16 @@ function toFloat64(v: unknown): number {
 }
 
 /**
- * Check if values are equal
+ * 检查值是否相等
+ * // EN: Check if values are equal
  */
 function valuesEqual(a: BSONValue | unknown, b: BSONValue | unknown): boolean {
     return compareBSON(a as BSONValue, b as BSONValue) === 0;
 }
 
 /**
- * Match document against filter
+ * 匹配文档与过滤条件
+ * // EN: Match document against filter
  */
 function matchDocument(doc: BSONDocument, filter: BSONDocument): boolean {
     for (const key of Object.keys(filter)) {
@@ -776,10 +822,11 @@ function matchDocument(doc: BSONDocument, filter: BSONDocument): boolean {
 }
 
 /**
- * Match value against filter value
+ * 匹配值与过滤值
+ * // EN: Match value against filter value
  */
 function matchValue(docVal: unknown, filterVal: unknown): boolean {
-    // Handle operator expressions
+    // 处理操作符表达式 // EN: Handle operator expressions
     if (typeof filterVal === 'object' && filterVal !== null && !Array.isArray(filterVal)) {
         const filterDoc = filterVal as BSONDocument;
         const keys = Object.keys(filterDoc);
@@ -789,12 +836,13 @@ function matchValue(docVal: unknown, filterVal: unknown): boolean {
         }
     }
 
-    // Direct equality
+    // 直接相等比较 // EN: Direct equality
     return valuesEqual(docVal, filterVal);
 }
 
 /**
- * Match operators
+ * 匹配操作符
+ * // EN: Match operators
  */
 function matchOperators(docVal: unknown, operators: BSONDocument): boolean {
     for (const op of Object.keys(operators)) {
@@ -845,13 +893,14 @@ function matchOperators(docVal: unknown, operators: BSONDocument): boolean {
 }
 
 /**
- * Apply projection to document
+ * 对文档应用投影
+ * // EN: Apply projection to document
  */
 function applyProjection(doc: BSONDocument, projection: BSONDocument): BSONDocument {
     const result: BSONDocument = {};
     const keys = Object.keys(projection);
 
-    // Check if it's inclusion or exclusion
+    // 检查是包含模式还是排除模式 // EN: Check if it's inclusion or exclusion
     let hasInclusion = false;
     let hasExclusion = false;
 
@@ -866,7 +915,7 @@ function applyProjection(doc: BSONDocument, projection: BSONDocument): BSONDocum
     }
 
     if (hasInclusion) {
-        // Inclusion mode
+        // 包含模式 // EN: Inclusion mode
         if (projection._id !== 0 && projection._id !== false) {
             if (doc._id !== undefined) {
                 result._id = doc._id;
@@ -883,7 +932,7 @@ function applyProjection(doc: BSONDocument, projection: BSONDocument): BSONDocum
             }
         }
     } else if (hasExclusion) {
-        // Exclusion mode
+        // 排除模式 // EN: Exclusion mode
         for (const key of Object.keys(doc)) {
             if (projection[key] === 0 || projection[key] === false) {
                 continue;
@@ -891,7 +940,7 @@ function applyProjection(doc: BSONDocument, projection: BSONDocument): BSONDocum
             result[key] = doc[key];
         }
     } else {
-        // Expression projection
+        // 表达式投影 // EN: Expression projection
         for (const key of Object.keys(doc)) {
             result[key] = doc[key];
         }
@@ -901,7 +950,8 @@ function applyProjection(doc: BSONDocument, projection: BSONDocument): BSONDocum
 }
 
 /**
- * Sort documents by fields
+ * 按字段排序文档
+ * // EN: Sort documents by fields
  */
 function sortDocuments(docs: BSONDocument[], sortSpec: BSONDocument): BSONDocument[] {
     const result = [...docs];
@@ -924,19 +974,26 @@ function sortDocuments(docs: BSONDocument[], sortSpec: BSONDocument): BSONDocume
 }
 
 /**
- * Aggregate result structure
+ * 聚合结果结构
+ * // EN: Aggregate result structure
  */
 export interface AggregateResult {
+    /** 游标 // EN: Cursor */
     cursor: {
+        /** 游标 ID // EN: Cursor ID */
         id: bigint;
+        /** 命名空间 // EN: Namespace */
         ns: string;
+        /** 第一批结果 // EN: First batch */
         firstBatch: BSONDocument[];
     };
+    /** 操作状态 // EN: Operation status */
     ok: number;
 }
 
 /**
- * Create aggregate result
+ * 创建聚合结果
+ * // EN: Create aggregate result
  */
 export function createAggregateResult(ns: string, docs: BSONDocument[]): AggregateResult {
     return {

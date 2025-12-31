@@ -11,13 +11,19 @@ import { DataEndian } from '../storage/dataEndian';
 import { Logger } from '../core/logger';
 
 /**
- * Protocol server for MongoDB Wire Protocol
+ * MongoDB Wire 协议服务器
+ * // EN: Protocol server for MongoDB Wire Protocol
  */
 export class ProtocolServer {
+    /** 监听地址 // EN: Listen address */
     private addr: string;
+    /** 数据库实例 // EN: Database instance */
     private db: Database;
+    /** TCP 服务器 // EN: TCP server */
     private server: net.Server | null = null;
+    /** 活动连接集合 // EN: Active connections set */
     private connections: Set<net.Socket> = new Set();
+    /** 运行状态 // EN: Running state */
     private running: boolean = false;
 
     constructor(addr: string, db: Database) {
@@ -26,7 +32,8 @@ export class ProtocolServer {
     }
 
     /**
-     * Start the server
+     * 启动服务器
+     * // EN: Start the server
      */
     async start(): Promise<void> {
         return new Promise((resolve, reject) => {
@@ -51,18 +58,19 @@ export class ProtocolServer {
     }
 
     /**
-     * Stop the server
+     * 停止服务器
+     * // EN: Stop the server
      */
     async stop(): Promise<void> {
         this.running = false;
 
-        // Close all active connections
+        // 关闭所有活动连接 // EN: Close all active connections
         for (const socket of this.connections) {
             socket.destroy();
         }
         this.connections.clear();
 
-        // Close server
+        // 关闭服务器 // EN: Close server
         return new Promise((resolve) => {
             if (this.server) {
                 this.server.close(() => {
@@ -76,7 +84,8 @@ export class ProtocolServer {
     }
 
     /**
-     * Get server address
+     * 获取服务器地址
+     * // EN: Get server address
      */
     getAddr(): string {
         if (this.server) {
@@ -89,7 +98,8 @@ export class ProtocolServer {
     }
 
     /**
-     * Handle a new connection
+     * 处理新连接
+     * // EN: Handle a new connection
      */
     private handleConnection(socket: net.Socket): void {
         const clientAddr = `${socket.remoteAddress}:${socket.remotePort}`;
@@ -120,14 +130,21 @@ export class ProtocolServer {
 }
 
 /**
- * Connection handler for a single client connection
+ * 单个客户端连接的处理器
+ * // EN: Connection handler for a single client connection
  */
 class ConnectionHandler {
+    /** 套接字 // EN: Socket */
     private socket: net.Socket;
+    /** 数据库实例 // EN: Database instance */
     private db: Database;
+    /** 当前数据库名 // EN: Current database name */
     private dbName: string = 'test';
+    /** 接收缓冲区 // EN: Receive buffer */
     private buffer: Buffer = Buffer.alloc(0);
+    /** BSON 编码器 // EN: BSON encoder */
     private encoder = new BSONEncoder();
+    /** BSON 解码器 // EN: BSON decoder */
     private decoder = new BSONDecoder();
 
     constructor(socket: net.Socket, db: Database) {
@@ -136,7 +153,8 @@ class ConnectionHandler {
     }
 
     /**
-     * Run the connection handler loop
+     * 运行连接处理循环
+     * // EN: Run the connection handler loop
      */
     async run(): Promise<void> {
         return new Promise((resolve, reject) => {
@@ -161,13 +179,14 @@ class ConnectionHandler {
     }
 
     /**
-     * Handle incoming data
+     * 处理接收的数据
+     * // EN: Handle incoming data
      */
     private async handleData(data: Buffer): Promise<void> {
-        // Append to buffer
+        // 追加到缓冲区 // EN: Append to buffer
         this.buffer = Buffer.concat([this.buffer, data]);
 
-        // Process complete messages
+        // 处理完整的消息 // EN: Process complete messages
         while (this.buffer.length >= 4) {
             const messageLength = DataEndian.readInt32LE(this.buffer, 0);
 
@@ -176,15 +195,15 @@ class ConnectionHandler {
             }
 
             if (this.buffer.length < messageLength) {
-                // Wait for more data
+                // 等待更多数据 // EN: Wait for more data
                 return;
             }
 
-            // Extract complete message
+            // 提取完整消息 // EN: Extract complete message
             const messageBuffer = this.buffer.subarray(0, messageLength);
             this.buffer = this.buffer.subarray(messageLength);
 
-            // Parse and handle message
+            // 解析并处理消息 // EN: Parse and handle message
             const msg = WireMessage.fromBuffer(messageBuffer);
             const response = await this.handleMessage(msg, messageBuffer);
 
@@ -195,7 +214,8 @@ class ConnectionHandler {
     }
 
     /**
-     * Handle a single message
+     * 处理单条消息
+     * // EN: Handle a single message
      */
     private async handleMessage(msg: WireMessage, fullMessage: Buffer): Promise<WireMessage | null> {
         try {
@@ -231,7 +251,8 @@ class ConnectionHandler {
     }
 
     /**
-     * Handle OP_MSG message
+     * 处理 OP_MSG 消息
+     * // EN: Handle OP_MSG message
      */
     private async handleOpMsg(msg: WireMessage, fullMessage: Buffer): Promise<WireMessage> {
         const opMsg = OpMsgParser.parse(msg.body, fullMessage);
@@ -242,7 +263,8 @@ class ConnectionHandler {
 
         let cmd = opMsg.body;
 
-        // Attach document sequences for insert/update/delete commands
+        // 附加文档序列用于 insert/update/delete 命令
+        // EN: Attach document sequences for insert/update/delete commands
         for (const seq of opMsg.sequences) {
             if (seq.identifier === 'documents') {
                 cmd = this.setField(cmd, 'documents', seq.documents);
@@ -253,13 +275,13 @@ class ConnectionHandler {
             }
         }
 
-        // Extract database name
+        // 提取数据库名 // EN: Extract database name
         const dbVal = this.getField(cmd, '$db');
         if (typeof dbVal === 'string') {
             this.dbName = dbVal;
         }
 
-        // Execute command
+        // 执行命令 // EN: Execute command
         let response: BSONDocument;
         try {
             response = await this.db.runCommand(cmd);
@@ -271,12 +293,14 @@ class ConnectionHandler {
     }
 
     /**
-     * Handle OP_QUERY message (legacy, mainly for handshake)
+     * 处理 OP_QUERY 消息（遗留协议，主要用于握手）
+     * // EN: Handle OP_QUERY message (legacy, mainly for handshake)
      */
     private async handleOpQuery(msg: WireMessage): Promise<WireMessage> {
         const query = OpQueryParser.parse(msg.body);
 
-        // Check if this is an admin.$cmd query (typically isMaster/hello)
+        // 检查是否是 admin.$cmd 查询（通常是 isMaster/hello）
+        // EN: Check if this is an admin.$cmd query (typically isMaster/hello)
         if (query.fullCollectionName.endsWith('.$cmd')) {
             let response: BSONDocument;
             try {
@@ -287,7 +311,7 @@ class ConnectionHandler {
             return OpReplyBuilder.buildReply(msg.header.requestId, [response]);
         }
 
-        // Other OP_QUERY not supported
+        // 其他 OP_QUERY 不支持 // EN: Other OP_QUERY not supported
         return OpReplyBuilder.buildReply(msg.header.requestId, [{
             ok: 0,
             errmsg: 'OP_QUERY is deprecated, use OP_MSG',
@@ -295,7 +319,8 @@ class ConnectionHandler {
     }
 
     /**
-     * Build structured error response
+     * 构建结构化错误响应
+     * // EN: Build structured error response
      */
     private buildStructuredErrorResponse(err: unknown): BSONDocument {
         if (err instanceof MonoError) {
@@ -316,7 +341,8 @@ class ConnectionHandler {
     }
 
     /**
-     * Build error response as WireMessage
+     * 构建 WireMessage 格式的错误响应
+     * // EN: Build error response as WireMessage
      */
     private buildErrorResponse(requestId: number, code: number, codeName: string, message: string): WireMessage {
         const response: BSONDocument = {
@@ -329,14 +355,16 @@ class ConnectionHandler {
     }
 
     /**
-     * Get field from BSON document
+     * 从 BSON 文档获取字段
+     * // EN: Get field from BSON document
      */
     private getField(doc: BSONDocument, key: string): unknown {
         return doc[key];
     }
 
     /**
-     * Set field in BSON document
+     * 在 BSON 文档中设置字段
+     * // EN: Set field in BSON document
      */
     private setField(doc: BSONDocument, key: string, value: unknown): BSONDocument {
         return { ...doc, [key]: value as any };

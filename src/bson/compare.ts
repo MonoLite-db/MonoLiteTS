@@ -1,5 +1,9 @@
 // Created by Yanjunhui
-// BSON comparison utilities using official MongoDB bson library
+
+/**
+ * 使用官方 MongoDB bson 库的 BSON 比较工具
+ * EN: BSON comparison utilities using official MongoDB bson library
+ */
 
 import {
     ObjectId,
@@ -15,32 +19,34 @@ import {
 import { BSONValue, BSONDocument } from './types';
 
 /**
- * BSON type order for comparison (MongoDB spec)
+ * BSON 类型比较顺序（MongoDB 规范）
+ * EN: BSON type order for comparison (MongoDB spec)
  * https://www.mongodb.com/docs/manual/reference/bson-type-comparison-order/
  */
 const TYPE_ORDER: Map<string, number> = new Map([
-    ['MinKey', 0],
-    ['undefined', 1],
-    ['null', 2],
-    ['number', 3],
-    ['bigint', 3],
-    ['Long', 3],
-    ['Decimal128', 3],
-    ['string', 4],
-    ['symbol', 5],
-    ['object', 6],
-    ['array', 7],
-    ['Binary', 8],
-    ['ObjectId', 9],
-    ['boolean', 10],
-    ['Date', 11],
-    ['Timestamp', 12],
-    ['RegExp', 13],
-    ['MaxKey', 14],
+    ['MinKey', 0],      // 最小键 EN: Min key
+    ['undefined', 1],   // 未定义 EN: Undefined
+    ['null', 2],        // 空值 EN: Null
+    ['number', 3],      // 数字 EN: Number
+    ['bigint', 3],      // 大整数 EN: BigInt
+    ['Long', 3],        // 长整数 EN: Long
+    ['Decimal128', 3],  // 128位十进制 EN: Decimal128
+    ['string', 4],      // 字符串 EN: String
+    ['symbol', 5],      // 符号 EN: Symbol
+    ['object', 6],      // 对象 EN: Object
+    ['array', 7],       // 数组 EN: Array
+    ['Binary', 8],      // 二进制 EN: Binary
+    ['ObjectId', 9],    // 对象ID EN: ObjectId
+    ['boolean', 10],    // 布尔值 EN: Boolean
+    ['Date', 11],       // 日期 EN: Date
+    ['Timestamp', 12],  // 时间戳 EN: Timestamp
+    ['RegExp', 13],     // 正则表达式 EN: RegExp
+    ['MaxKey', 14],     // 最大键 EN: Max key
 ]);
 
 /**
- * Get type order for a value
+ * 获取值的类型顺序
+ * EN: Get type order for a value
  */
 function getTypeOrder(value: BSONValue): number {
     if (value === null) return TYPE_ORDER.get('null')!;
@@ -64,7 +70,8 @@ function getTypeOrder(value: BSONValue): number {
 }
 
 /**
- * Convert numeric value to number for comparison
+ * 将数值类型转换为 number 用于比较
+ * EN: Convert numeric value to number for comparison
  */
 function toNumber(value: any): number {
     if (typeof value === 'number') return value;
@@ -75,19 +82,23 @@ function toNumber(value: any): number {
 }
 
 /**
- * Compare two BSON values (aligned with Go/Swift versions)
- * Returns: negative if a < b, 0 if a == b, positive if a > b
+ * 比较两个 BSON 值（与 Go/Swift 版本对齐）
+ * EN: Compare two BSON values (aligned with Go/Swift versions)
+ * @returns 负数表示 a < b，0 表示相等，正数表示 a > b
+ * EN: Returns negative if a < b, 0 if a == b, positive if a > b
  */
 export function compareBSONValues(a: BSONValue, b: BSONValue): number {
     const typeOrderA = getTypeOrder(a);
     const typeOrderB = getTypeOrder(b);
 
-    // Different types: compare by type order
+    // 不同类型：按类型顺序比较
+    // EN: Different types: compare by type order
     if (typeOrderA !== typeOrderB) {
         return typeOrderA - typeOrderB;
     }
 
-    // Same type: compare values
+    // 相同类型：比较值
+    // EN: Same type: compare values
     if (a === null || a === undefined) {
         return 0;
     }
@@ -100,7 +111,8 @@ export function compareBSONValues(a: BSONValue, b: BSONValue): number {
         return (a ? 1 : 0) - (b ? 1 : 0);
     }
 
-    // Numeric types (number, bigint, Long, Decimal128)
+    // 数值类型（number、bigint、Long、Decimal128）
+    // EN: Numeric types (number, bigint, Long, Decimal128)
     if ((typeof a === 'number' || typeof a === 'bigint' || Long.isLong(a) || a instanceof Decimal128) &&
         (typeof b === 'number' || typeof b === 'bigint' || Long.isLong(b) || b instanceof Decimal128)) {
         const numA = toNumber(a);
@@ -122,7 +134,8 @@ export function compareBSONValues(a: BSONValue, b: BSONValue): number {
         const tA = a.toNumber ? a.toNumber() : Number(a.t);
         const tB = b.toNumber ? b.toNumber() : Number(b.t);
         if (tA !== tB) return tA - tB;
-        // Compare increment
+        // 比较递增值
+        // EN: Compare increment
         const iA = typeof (a as any).i === 'number' ? (a as any).i : 0;
         const iB = typeof (b as any).i === 'number' ? (b as any).i : 0;
         return iA - iB;
@@ -133,11 +146,13 @@ export function compareBSONValues(a: BSONValue, b: BSONValue): number {
     }
 
     if (a instanceof Binary && b instanceof Binary) {
-        // Compare subtype first
+        // 先比较子类型
+        // EN: Compare subtype first
         if (a.sub_type !== b.sub_type) {
             return a.sub_type - b.sub_type;
         }
-        // Compare buffers byte by byte
+        // 逐字节比较缓冲区
+        // EN: Compare buffers byte by byte
         const minLen = Math.min(a.buffer.length, b.buffer.length);
         for (let i = 0; i < minLen; i++) {
             if (a.buffer[i] !== b.buffer[i]) {
@@ -179,20 +194,24 @@ export function compareBSONValues(a: BSONValue, b: BSONValue): number {
 }
 
 /**
- * Compare two documents
+ * 比较两个文档
+ * EN: Compare two documents
  */
 function compareDocuments(a: BSONDocument, b: BSONDocument): number {
     const keysA = Object.keys(a);
     const keysB = Object.keys(b);
 
-    // Compare key by key in order
+    // 按顺序逐键比较
+    // EN: Compare key by key in order
     const minLen = Math.min(keysA.length, keysB.length);
     for (let i = 0; i < minLen; i++) {
-        // Compare key names
+        // 比较键名
+        // EN: Compare key names
         const keyCmp = keysA[i].localeCompare(keysB[i]);
         if (keyCmp !== 0) return keyCmp;
 
-        // Compare values
+        // 比较值
+        // EN: Compare values
         const valueCmp = compareBSONValues(a[keysA[i]], b[keysB[i]]);
         if (valueCmp !== 0) return valueCmp;
     }
@@ -201,20 +220,24 @@ function compareDocuments(a: BSONDocument, b: BSONDocument): number {
 }
 
 /**
- * Check if two BSON values are equal
+ * 检查两个 BSON 值是否相等
+ * EN: Check if two BSON values are equal
  */
 export function bsonEquals(a: BSONValue, b: BSONValue): boolean {
     return compareBSONValues(a, b) === 0;
 }
 
 /**
- * Deep clone a BSON value
+ * 深度克隆 BSON 值
+ * EN: Deep clone a BSON value
  */
 export function cloneBSONValue(value: BSONValue): BSONValue {
     if (value === null || value === undefined) {
         return value;
     }
 
+    // 原始类型直接返回
+    // EN: Primitive types return directly
     if (typeof value === 'boolean' || typeof value === 'number' ||
         typeof value === 'bigint' || typeof value === 'string') {
         return value;
@@ -260,10 +283,14 @@ export function cloneBSONValue(value: BSONValue): BSONValue {
         return new Code(value.code, value.scope ? cloneBSONValue(value.scope) as BSONDocument : undefined);
     }
 
+    // 数组递归克隆
+    // EN: Array recursive clone
     if (Array.isArray(value)) {
         return value.map(v => cloneBSONValue(v));
     }
 
+    // 对象递归克隆
+    // EN: Object recursive clone
     if (typeof value === 'object') {
         const result: BSONDocument = {};
         for (const [key, val] of Object.entries(value)) {
@@ -276,7 +303,8 @@ export function cloneBSONValue(value: BSONValue): BSONValue {
 }
 
 /**
- * Get a value from a document by dot-notation path
+ * 通过点号路径从文档中获取值
+ * EN: Get a value from a document by dot-notation path
  */
 export function getValueByPath(doc: BSONDocument, path: string): BSONValue {
     const parts = path.split('.');
@@ -305,7 +333,8 @@ export function getValueByPath(doc: BSONDocument, path: string): BSONValue {
 }
 
 /**
- * Set a value in a document by dot-notation path
+ * 通过点号路径在文档中设置值
+ * EN: Set a value in a document by dot-notation path
  */
 export function setValueByPath(doc: BSONDocument, path: string, value: BSONValue): void {
     const parts = path.split('.');
@@ -317,6 +346,8 @@ export function setValueByPath(doc: BSONDocument, path: string, value: BSONValue
         const isNextIndex = !isNaN(parseInt(nextPart, 10));
 
         if (current[part] === undefined || current[part] === null) {
+            // 根据下一级是索引还是键决定创建数组还是对象
+            // EN: Create array or object based on whether next level is index or key
             current[part] = isNextIndex ? [] : {};
         }
         current = current[part];
@@ -326,7 +357,8 @@ export function setValueByPath(doc: BSONDocument, path: string, value: BSONValue
 }
 
 /**
- * Delete a value from a document by dot-notation path
+ * 通过点号路径从文档中删除值
+ * EN: Delete a value from a document by dot-notation path
  */
 export function deleteValueByPath(doc: BSONDocument, path: string): boolean {
     const parts = path.split('.');
@@ -349,6 +381,7 @@ export function deleteValueByPath(doc: BSONDocument, path: string): boolean {
 }
 
 /**
- * Alias for compareBSONValues (for compatibility)
+ * compareBSONValues 的别名（用于兼容性）
+ * EN: Alias for compareBSONValues (for compatibility)
  */
 export const compareBSON = compareBSONValues;

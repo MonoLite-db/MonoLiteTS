@@ -6,36 +6,50 @@ import { Pager } from './pager';
 import { DataEndian } from './dataEndian';
 
 /**
- * BTree node metadata stored in page
+ * B+ 树节点元数据（存储在页面中）
+ * // EN: BTree node metadata stored in page
  *
- * Layout (at start of first slot):
- * - isLeaf: 1 byte
- * - keyCount: 2 bytes
- * - parent: 4 bytes
- * - prev: 4 bytes (leaf only, for range scan)
- * - next: 4 bytes (leaf only, for range scan)
+ * 布局（在第一个槽位的开头）：
+ * // EN: Layout (at start of first slot):
+ * - isLeaf: 1 字节 / 1 byte
+ * - keyCount: 2 字节 / 2 bytes
+ * - parent: 4 字节 / 4 bytes
+ * - prev: 4 字节（仅叶节点，用于范围扫描）/ 4 bytes (leaf only, for range scan)
+ * - next: 4 字节（仅叶节点，用于范围扫描）/ 4 bytes (leaf only, for range scan)
  */
 const NODE_META_SIZE = 15;
 
 /**
- * BTree node structure (in-memory representation)
+ * B+ 树节点结构（内存表示）
+ * // EN: BTree node structure (in-memory representation)
  */
 export interface BTreeNode {
     pageId: number;
     isLeaf: boolean;
     keyCount: number;
+    /** 父节点 ID // EN: Parent node ID */
     parent: number;
-    prev: number; // Previous leaf (for range scan)
-    next: number; // Next leaf (for range scan)
+    /** 前一个叶节点（用于范围扫描）// EN: Previous leaf (for range scan) */
+    prev: number;
+    /** 后一个叶节点（用于范围扫描）// EN: Next leaf (for range scan) */
+    next: number;
+    /** 键数组 // EN: Keys array */
     keys: Buffer[];
-    values: Buffer[]; // For leaf nodes: actual values; for internal: empty
-    children: number[]; // For internal nodes: child page IDs
+    /** 值数组（叶节点：实际值；内部节点：空）// EN: For leaf nodes: actual values; for internal: empty */
+    values: Buffer[];
+    /** 子节点 ID 数组（仅内部节点）// EN: For internal nodes: child page IDs */
+    children: number[];
 }
 
 /**
- * B+Tree implementation (aligned with Go version)
+ * B+ 树实现（与 Go 版本对齐）
+ * // EN: B+Tree implementation (aligned with Go version)
  *
- * Features:
+ * 功能：
+ * - 支持可变长度的键和值
+ * - 叶节点形成双向链表，用于范围扫描
+ * - 自动分裂和合并
+ * // EN: Features:
  * - Supports variable-length keys and values
  * - Leaf nodes form a doubly-linked list for range scans
  * - Automatic splitting and merging
@@ -56,14 +70,16 @@ export class BTree {
     }
 
     /**
-     * Default key comparator (lexicographic)
+     * 默认键比较器（字典序）
+     * // EN: Default key comparator (lexicographic)
      */
     static defaultComparator(a: Buffer, b: Buffer): number {
         return Buffer.compare(a, b);
     }
 
     /**
-     * Create a new empty BTree
+     * 创建一个新的空 B+ 树
+     * // EN: Create a new empty BTree
      */
     static async create(pager: Pager): Promise<BTree> {
         const rootPage = await pager.allocPage(PageType.BTreeLeaf);
@@ -83,14 +99,16 @@ export class BTree {
     }
 
     /**
-     * Get root page ID
+     * 获取根页面 ID
+     * // EN: Get root page ID
      */
     getRootPageId(): number {
         return this.rootPageId;
     }
 
     /**
-     * Search for a key
+     * 搜索键
+     * // EN: Search for a key
      */
     async search(key: Buffer): Promise<Buffer | null> {
         const node = await this.findLeaf(key);
@@ -102,26 +120,27 @@ export class BTree {
     }
 
     /**
-     * Insert a key-value pair
+     * 插入键值对
+     * // EN: Insert a key-value pair
      */
     async insert(key: Buffer, value: Buffer): Promise<void> {
         let node = await this.findLeaf(key);
         const idx = this.findKeyIndex(node, key);
 
-        // Check for duplicate
+        // 检查重复 // EN: Check for duplicate
         if (idx < node.keyCount && this.comparator(node.keys[idx], key) === 0) {
-            // Update existing
+            // 更新现有值 // EN: Update existing
             node.values[idx] = value;
             await this.writeNodeToPage(node);
             return;
         }
 
-        // Insert at position
+        // 在位置插入 // EN: Insert at position
         node.keys.splice(idx, 0, key);
         node.values.splice(idx, 0, value);
         node.keyCount++;
 
-        // Check if split needed
+        // 检查是否需要分裂 // EN: Check if split needed
         if (node.keyCount >= BTREE_ORDER) {
             await this.splitNode(node);
         } else {
@@ -130,22 +149,23 @@ export class BTree {
     }
 
     /**
-     * Delete a key
+     * 删除键
+     * // EN: Delete a key
      */
     async delete(key: Buffer): Promise<boolean> {
         const node = await this.findLeaf(key);
         const idx = this.findKeyIndex(node, key);
 
         if (idx >= node.keyCount || this.comparator(node.keys[idx], key) !== 0) {
-            return false; // Key not found
+            return false; // 未找到键 // EN: Key not found
         }
 
-        // Remove key-value
+        // 移除键值对 // EN: Remove key-value
         node.keys.splice(idx, 1);
         node.values.splice(idx, 1);
         node.keyCount--;
 
-        // Handle underflow
+        // 处理下溢 // EN: Handle underflow
         if (node.pageId !== this.rootPageId && node.keyCount < BTREE_MIN_KEYS) {
             await this.handleUnderflow(node);
         } else {
@@ -156,7 +176,8 @@ export class BTree {
     }
 
     /**
-     * Range search [startKey, endKey)
+     * 范围搜索 [startKey, endKey)
+     * // EN: Range search [startKey, endKey)
      */
     async searchRange(startKey: Buffer | null, endKey: Buffer | null): Promise<Buffer[]> {
         const results: Buffer[] = [];
@@ -165,11 +186,11 @@ export class BTree {
         if (startKey) {
             node = await this.findLeaf(startKey);
         } else {
-            // Start from leftmost leaf
+            // 从最左边的叶子节点开始 // EN: Start from leftmost leaf
             node = await this.findLeftmostLeaf();
         }
 
-        // Traverse leaves
+        // 遍历叶子节点 // EN: Traverse leaves
         outer: while (true) {
             for (let i = 0; i < node.keyCount; i++) {
                 if (startKey && this.comparator(node.keys[i], startKey) < 0) {
@@ -191,14 +212,16 @@ export class BTree {
     }
 
     /**
-     * Get all values
+     * 获取所有值
+     * // EN: Get all values
      */
     async getAll(): Promise<Buffer[]> {
         return this.searchRange(null, null);
     }
 
     /**
-     * Count all keys
+     * 计算所有键的数量
+     * // EN: Count all keys
      */
     async count(): Promise<number> {
         let count = 0;
@@ -216,7 +239,8 @@ export class BTree {
     }
 
     /**
-     * Find the leaf node that should contain the key
+     * 查找应该包含该键的叶子节点
+     * // EN: Find the leaf node that should contain the key
      */
     private async findLeaf(key: Buffer): Promise<BTreeNode> {
         let node = await this.readNode(this.rootPageId);
@@ -231,7 +255,8 @@ export class BTree {
     }
 
     /**
-     * Find leftmost leaf node
+     * 查找最左边的叶子节点
+     * // EN: Find leftmost leaf node
      */
     private async findLeftmostLeaf(): Promise<BTreeNode> {
         let node = await this.readNode(this.rootPageId);
@@ -244,7 +269,8 @@ export class BTree {
     }
 
     /**
-     * Find index where key should be inserted
+     * 查找键应该插入的索引位置
+     * // EN: Find index where key should be inserted
      */
     private findKeyIndex(node: BTreeNode, key: Buffer): number {
         let lo = 0;
@@ -263,11 +289,14 @@ export class BTree {
     }
 
     /**
-     * Calculate the byte size of a node (aligned with Go version)
-     * Used for byte-driven split point calculation
+     * 计算节点的字节大小（与 Go 版本对齐）
+     * 用于基于字节的分裂点计算
+     * // EN: Calculate the byte size of a node (aligned with Go version)
+     * // EN: Used for byte-driven split point calculation
      */
     private calculateNodeByteSize(node: BTreeNode): number {
-        // Header: isLeaf(1) + keyCount(2) + parent(4) + prev(4) + next(4) = 15
+        // 头部：isLeaf(1) + keyCount(2) + parent(4) + prev(4) + next(4) = 15
+        // EN: Header: isLeaf(1) + keyCount(2) + parent(4) + prev(4) + next(4) = 15
         const headerSize = 15;
         let size = headerSize;
 
@@ -290,22 +319,25 @@ export class BTree {
     }
 
     /**
-     * Find byte-driven split point (aligned with Go version)
-     * Returns split index that balances left/right byte sizes
+     * 查找基于字节的分裂点（与 Go 版本对齐）
+     * 返回平衡左右字节大小的分裂索引
+     * // EN: Find byte-driven split point (aligned with Go version)
+     * // EN: Returns split index that balances left/right byte sizes
      */
     private findByteDrivenSplitPoint(node: BTreeNode): number {
         if (node.keyCount <= 1) {
             return 0;
         }
 
-        // Calculate total size
+        // 计算总大小 // EN: Calculate total size
         const totalSize = this.calculateNodeByteSize(node);
         const targetSize = Math.floor(totalSize / 2);
 
-        // Accumulate from start to find split point closest to target
+        // 从开始累积，找到最接近目标的分裂点
+        // EN: Accumulate from start to find split point closest to target
         const headerSize = 15;
         let leftSize = headerSize;
-        let bestMid = Math.floor(node.keyCount / 2); // Default to midpoint
+        let bestMid = Math.floor(node.keyCount / 2); // 默认为中点 // EN: Default to midpoint
 
         for (let i = 0; i < node.keyCount; i++) {
             leftSize += 2 + node.keys[i].length;
@@ -315,9 +347,10 @@ export class BTree {
                 leftSize += 4;
             }
 
-            // Check if we've reached/approached the target
+            // 检查是否达到/接近目标 // EN: Check if we've reached/approached the target
             if (leftSize >= targetSize) {
-                // Ensure split point is between 1 and keyCount-1
+                // 确保分裂点在 1 和 keyCount-1 之间
+                // EN: Ensure split point is between 1 and keyCount-1
                 if (i < 1) {
                     bestMid = 1;
                 } else if (i >= node.keyCount - 1) {
@@ -329,7 +362,7 @@ export class BTree {
             }
         }
 
-        // Ensure split point is valid
+        // 确保分裂点有效 // EN: Ensure split point is valid
         if (bestMid < 1) {
             bestMid = 1;
         }
@@ -341,14 +374,17 @@ export class BTree {
     }
 
     /**
-     * Split a node when it overflows
-     * Uses byte-driven split point calculation (aligned with Go version)
+     * 当节点溢出时分裂节点
+     * 使用基于字节的分裂点计算（与 Go 版本对齐）
+     * // EN: Split a node when it overflows
+     * // EN: Uses byte-driven split point calculation (aligned with Go version)
      */
     private async splitNode(node: BTreeNode): Promise<void> {
-        // Use byte-driven split point instead of simple midpoint
+        // 使用基于字节的分裂点而不是简单的中点
+        // EN: Use byte-driven split point instead of simple midpoint
         const midIdx = this.findByteDrivenSplitPoint(node);
 
-        // Create new right node
+        // 创建新的右节点 // EN: Create new right node
         const rightPage = await this.pager.allocPage(
             node.isLeaf ? PageType.BTreeLeaf : PageType.BTreeInternal
         );

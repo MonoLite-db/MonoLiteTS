@@ -6,90 +6,137 @@ import { MonoError, MAX_DOCUMENT_SIZE, logger, AsyncMutex } from '../core';
 import { IndexManager, IndexMeta, DocumentFinder } from './indexManager';
 
 /**
- * Collection metadata
+ * 集合元数据
+ * // EN: Collection metadata
  */
 export interface CollectionInfo {
+    /** 集合名称 // EN: Collection name */
     name: string;
+    /** 数据页 ID // EN: Data page ID */
     dataPageId: number;
+    /** 索引根页 ID // EN: Index root page ID */
     indexRootPageId: number;
+    /** 文档数量 // EN: Document count */
     documentCount: number;
+    /** 索引列表 // EN: Index list */
     indexes: IndexMeta[];
+    /** 创建时间 // EN: Creation time */
     createdAt: Date;
+    /** 更新时间 // EN: Update time */
     updatedAt: Date;
 }
 
 /**
- * Insert result
+ * 插入结果
+ * // EN: Insert result
  */
 export interface InsertResult {
+    /** 插入的文档 ID // EN: Inserted document ID */
     insertedId: any;
+    /** 是否确认 // EN: Whether acknowledged */
     acknowledged: boolean;
 }
 
 /**
- * Insert many result
+ * 批量插入结果
+ * // EN: Insert many result
  */
 export interface InsertManyResult {
+    /** 插入的文档 ID 列表 // EN: List of inserted document IDs */
     insertedIds: any[];
+    /** 插入的文档数量 // EN: Number of documents inserted */
     insertedCount: number;
+    /** 是否确认 // EN: Whether acknowledged */
     acknowledged: boolean;
 }
 
 /**
- * Update result
+ * 更新结果
+ * // EN: Update result
  */
 export interface UpdateResult {
+    /** 匹配的文档数量 // EN: Number of matched documents */
     matchedCount: number;
+    /** 修改的文档数量 // EN: Number of modified documents */
     modifiedCount: number;
+    /** 插入或更新的文档 ID // EN: Upserted document ID */
     upsertedId?: any;
+    /** 是否确认 // EN: Whether acknowledged */
     acknowledged: boolean;
 }
 
 /**
- * Delete result
+ * 删除结果
+ * // EN: Delete result
  */
 export interface DeleteResult {
+    /** 删除的文档数量 // EN: Number of deleted documents */
     deletedCount: number;
+    /** 是否确认 // EN: Whether acknowledged */
     acknowledged: boolean;
 }
 
 /**
- * Find options
+ * 查询选项
+ * // EN: Find options
  */
 export interface FindOptions {
+    /** 过滤条件 // EN: Filter condition */
     filter?: BSONDocument;
+    /** 投影 // EN: Projection */
     projection?: BSONDocument;
+    /** 排序 // EN: Sort order */
     sort?: BSONDocument;
+    /** 跳过数量 // EN: Number to skip */
     skip?: number;
+    /** 限制数量 // EN: Number to limit */
     limit?: number;
+    /** 批量大小 // EN: Batch size */
     batchSize?: number;
 }
 
 /**
- * Inserted record tracking for rollback
+ * 已插入记录跟踪（用于回滚）
+ * // EN: Inserted record tracking for rollback
  */
 interface InsertedRecord {
+    /** 文档 ID // EN: Document ID */
     id: BSONValue;
+    /** ID 键 // EN: ID key */
     idKey: Buffer;
 }
 
 /**
- * Collection class (aligned with Go/Swift versions)
- * 
- * Features:
+ * 集合类（与 Go/Swift 版本对齐）
+ * // EN: Collection class (aligned with Go/Swift versions)
+ *
+ * 功能：
+ * - 完整的 CRUD 操作
+ * - 索引管理集成
+ * - 数据一致性回滚支持
+ * - 唯一约束强制
+ * // EN: Features:
  * - Full CRUD operations
  * - Index management integration
  * - Rollback support for data consistency
  * - Unique constraint enforcement
  */
 export class Collection implements DocumentFinder {
+    /** 集合名称 // EN: Collection name */
     readonly name: string;
+    /** 页面管理器 // EN: Pager */
     private pager: Pager;
+    /** 集合信息 // EN: Collection info */
     private info: CollectionInfo;
+    /** 数据 B+ 树 // EN: Data B+ tree */
     private dataTree: BTree | null = null;
+    /** 索引管理器 // EN: Index manager */
     private indexManager: IndexManager;
+    /** BSON 编码器 // EN: BSON encoder */
     private encoder: BSONEncoder;
+    /** BSON 解码器 // EN: BSON decoder */
     private decoder: BSONDecoder;
+    /** 写入队列（异步互斥锁）// EN: Write queue (async mutex) */
     private writeQueue: AsyncMutex = new AsyncMutex();
 
     constructor(name: string, pager: Pager, info: CollectionInfo) {
@@ -106,25 +153,27 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Initialize collection trees and restore indexes
+     * 初始化集合树并恢复索引
+     * // EN: Initialize collection trees and restore indexes
      */
     async init(): Promise<void> {
         if (this.info.dataPageId > 0) {
             this.dataTree = new BTree(this.pager, this.info.dataPageId);
         } else {
-            // Create new data tree
+            // 创建新的数据树 // EN: Create new data tree
             this.dataTree = await BTree.create(this.pager);
             this.info.dataPageId = this.dataTree.getRootPageId();
         }
 
-        // Restore indexes from catalog
+        // 从目录恢复索引 // EN: Restore indexes from catalog
         if (this.info.indexes && this.info.indexes.length > 0) {
             await this.indexManager.restoreIndexes(this.info.indexes);
         }
     }
 
     /**
-     * Get collection info
+     * 获取集合信息
+     * // EN: Get collection info
      */
     getInfo(): CollectionInfo {
         return {
@@ -134,72 +183,78 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Get index manager
+     * 获取索引管理器
+     * // EN: Get index manager
      */
     getIndexManager(): IndexManager {
         return this.indexManager;
     }
 
-    // ==================== DocumentFinder Implementation ====================
+    // ==================== DocumentFinder 实现 / DocumentFinder Implementation ====================
 
     /**
-     * Find documents without holding locks (for index building)
+     * 查找文档（不持有锁，用于索引构建）
+     * // EN: Find documents without holding locks (for index building)
      */
     async findUnlocked(filter: BSONDocument | null): Promise<BSONDocument[]> {
         return this.find({ filter: filter || {} });
     }
 
-    // ==================== Insert Operations ====================
+    // ==================== 插入操作 / Insert Operations ====================
 
     /**
-     * Insert a single document (public API with write lock)
+     * 插入单个文档（公共 API，带写锁）
+     * // EN: Insert a single document (public API with write lock)
      */
     async insertOne(doc: BSONDocument): Promise<InsertResult> {
         return this.writeQueue.withLock(() => this.insertOneLocked(doc));
     }
 
     /**
-     * Insert a single document (internal, requires writeQueue protection)
+     * 插入单个文档（内部方法，需要 writeQueue 保护）
+     * // EN: Insert a single document (internal, requires writeQueue protection)
      *
-     * P0 FIX: Implements rollback on failure
-     * 1. Check unique constraints
-     * 2. Write document to data tree
-     * 3. Update indexes
-     * 4. On failure at any step, rollback previous changes
+     * P0 修复：实现失败时回滚
+     * // EN: P0 FIX: Implements rollback on failure
+     * 1. 检查唯一约束 / Check unique constraints
+     * 2. 将文档写入数据树 / Write document to data tree
+     * 3. 更新索引 / Update indexes
+     * 4. 任何步骤失败时，回滚之前的更改 / On failure at any step, rollback previous changes
      */
     private async insertOneLocked(doc: BSONDocument): Promise<InsertResult> {
-        // Ensure _id exists
+        // 确保 _id 存在 // EN: Ensure _id exists
         const docToInsert = cloneBSONValue(doc) as BSONDocument;
         if (docToInsert._id === undefined) {
             docToInsert._id = new ObjectId();
         }
 
-        // Validate and encode document
+        // 验证并编码文档 // EN: Validate and encode document
         const encoded = this.encodeDocument(docToInsert);
         if (encoded.length > MAX_DOCUMENT_SIZE) {
             throw MonoError.documentTooLarge(encoded.length, MAX_DOCUMENT_SIZE);
         }
 
-        // Get _id as key
+        // 获取 _id 作为键 // EN: Get _id as key
         const idKey = this.encodeId(docToInsert._id);
 
-        // Check for duplicate _id
+        // 检查重复的 _id // EN: Check for duplicate _id
         const existing = await this.dataTree!.search(idKey);
         if (existing) {
             throw MonoError.duplicateKey('_id', docToInsert._id);
         }
 
-        // Check unique constraints on secondary indexes
+        // 检查二级索引的唯一约束 // EN: Check unique constraints on secondary indexes
         await this.indexManager.checkUniqueConstraints(docToInsert);
 
-        // Insert into data tree
+        // 插入数据树 // EN: Insert into data tree
         await this.dataTree!.insert(idKey, encoded);
 
-        // Update indexes
+        // 更新索引 // EN: Update indexes
         try {
             await this.indexManager.insertDocument(docToInsert);
         } catch (err) {
-            // P0 CRITICAL FIX: Rollback data tree insert on index failure
+            // P0 关键修复：索引失败时回滚数据树插入
+            // EN: P0 CRITICAL FIX: Rollback data tree insert on index failure
             try {
                 await this.dataTree!.delete(idKey);
             } catch (rollbackErr) {
@@ -221,9 +276,11 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Insert multiple documents (public API with write lock)
+     * 插入多个文档（公共 API，带写锁）
+     * // EN: Insert multiple documents (public API with write lock)
      *
-     * P0 FIX: Implements partial rollback on failure
+     * P0 修复：实现失败时的部分回滚
+     * // EN: P0 FIX: Implements partial rollback on failure
      */
     async insertMany(docs: BSONDocument[]): Promise<InsertManyResult> {
         return this.writeQueue.withLock(async () => {
@@ -232,7 +289,8 @@ export class Collection implements DocumentFinder {
 
             for (const doc of docs) {
                 try {
-                    // Use insertOneLocked to avoid nested lock
+                    // 使用 insertOneLocked 避免嵌套锁
+                    // EN: Use insertOneLocked to avoid nested lock
                     const result = await this.insertOneLocked(doc);
                     insertedIds.push(result.insertedId);
                     insertedRecords.push({
@@ -240,7 +298,8 @@ export class Collection implements DocumentFinder {
                         idKey: this.encodeId(result.insertedId),
                     });
                 } catch (err) {
-                    // P0 CRITICAL FIX: Rollback all previously inserted documents
+                    // P0 关键修复：回滚所有之前插入的文档
+                    // EN: P0 CRITICAL FIX: Rollback all previously inserted documents
                     await this.rollbackInsertedRecords(insertedRecords);
                     throw err;
                 }
@@ -255,17 +314,18 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Rollback inserted records on batch insert failure
+     * 批量插入失败时回滚已插入的记录
+     * // EN: Rollback inserted records on batch insert failure
      */
     private async rollbackInsertedRecords(records: InsertedRecord[]): Promise<void> {
         for (let i = records.length - 1; i >= 0; i--) {
             const record = records[i];
             try {
-                // Get document for index cleanup
+                // 获取文档用于索引清理 // EN: Get document for index cleanup
                 const encoded = await this.dataTree!.search(record.idKey);
                 if (encoded) {
                     const doc = this.decoder.decode(encoded);
-                    // Delete from indexes
+                    // 从索引中删除 // EN: Delete from indexes
                     try {
                         await this.indexManager.deleteDocument(doc);
                     } catch (indexErr) {
@@ -275,7 +335,7 @@ export class Collection implements DocumentFinder {
                         });
                     }
                 }
-                // Delete from data tree
+                // 从数据树中删除 // EN: Delete from data tree
                 await this.dataTree!.delete(record.idKey);
                 this.info.documentCount--;
             } catch (err) {
@@ -287,16 +347,17 @@ export class Collection implements DocumentFinder {
         }
     }
 
-    // ==================== Find Operations ====================
+    // ==================== 查询操作 / Find Operations ====================
 
     /**
-     * Find documents matching filter
+     * 查找匹配过滤条件的文档
+     * // EN: Find documents matching filter
      */
     async find(options: FindOptions = {}): Promise<BSONDocument[]> {
         const allDocs = await this.dataTree!.getAll();
         let results: BSONDocument[] = [];
 
-        // Decode and filter
+        // 解码并过滤 // EN: Decode and filter
         for (const encoded of allDocs) {
             const doc = this.decoder.decode(encoded);
             if (this.matchesFilter(doc, options.filter || {})) {
@@ -304,22 +365,22 @@ export class Collection implements DocumentFinder {
             }
         }
 
-        // Sort
+        // 排序 // EN: Sort
         if (options.sort) {
             results = this.sortDocuments(results, options.sort);
         }
 
-        // Skip
+        // 跳过 // EN: Skip
         if (options.skip && options.skip > 0) {
             results = results.slice(options.skip);
         }
 
-        // Limit
+        // 限制 // EN: Limit
         if (options.limit && options.limit > 0) {
             results = results.slice(0, options.limit);
         }
 
-        // Project
+        // 投影 // EN: Project
         if (options.projection) {
             results = results.map(doc => this.applyProjection(doc, options.projection!));
         }
@@ -328,7 +389,8 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Find a single document
+     * 查找单个文档
+     * // EN: Find a single document
      */
     async findOne(filter: BSONDocument = {}, projection?: BSONDocument): Promise<BSONDocument | null> {
         const results = await this.find({ filter, projection, limit: 1 });
@@ -336,7 +398,8 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Find document by _id
+     * 通过 _id 查找文档
+     * // EN: Find document by _id
      */
     async findById(id: any): Promise<BSONDocument | null> {
         const idKey = this.encodeId(id);
@@ -347,10 +410,11 @@ export class Collection implements DocumentFinder {
         return this.decoder.decode(encoded);
     }
 
-    // ==================== Update Operations ====================
+    // ==================== 更新操作 / Update Operations ====================
 
     /**
-     * Update documents matching filter (public API with write lock)
+     * 更新匹配过滤条件的文档（公共 API，带写锁）
+     * // EN: Update documents matching filter (public API with write lock)
      */
     async updateMany(filter: BSONDocument, update: BSONDocument): Promise<UpdateResult> {
         return this.writeQueue.withLock(async () => {
@@ -361,22 +425,22 @@ export class Collection implements DocumentFinder {
                 const oldDoc = cloneBSONValue(doc) as BSONDocument;
                 const updatedDoc = await this.applyUpdate(doc, update);
 
-                // Check unique constraints (excluding current document)
+                // 检查唯一约束（排除当前文档）// EN: Check unique constraints (excluding current document)
                 await this.indexManager.checkUniqueConstraints(updatedDoc, oldDoc._id);
 
-                // Delete old index entries
+                // 删除旧的索引条目 // EN: Delete old index entries
                 await this.indexManager.deleteDocument(oldDoc);
 
-                // Update data
+                // 更新数据 // EN: Update data
                 const idKey = this.encodeId(doc._id);
                 const encoded = this.encodeDocument(updatedDoc);
                 await this.dataTree!.insert(idKey, encoded);
 
-                // Insert new index entries
+                // 插入新的索引条目 // EN: Insert new index entries
                 try {
                     await this.indexManager.insertDocument(updatedDoc);
                 } catch (err) {
-                    // Rollback: restore old index entries
+                    // 回滚：恢复旧的索引条目 // EN: Rollback: restore old index entries
                     try {
                         await this.indexManager.insertDocument(oldDoc);
                     } catch (rollbackErr) {
@@ -402,10 +466,11 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Update a single document (public API with write lock)
-     * @param filter - Filter to match document
-     * @param update - Update operations to apply
-     * @param upsert - If true, insert a new document if no match found
+     * 更新单个文档（公共 API，带写锁）
+     * // EN: Update a single document (public API with write lock)
+     * @param filter - 匹配文档的过滤条件 // EN: Filter to match document
+     * @param update - 要应用的更新操作 // EN: Update operations to apply
+     * @param upsert - 如果为 true，在没有匹配时插入新文档 // EN: If true, insert a new document if no match found
      */
     async updateOne(filter: BSONDocument, update: BSONDocument, upsert: boolean = false): Promise<UpdateResult> {
         return this.writeQueue.withLock(async () => {
@@ -418,7 +483,8 @@ export class Collection implements DocumentFinder {
                         acknowledged: true,
                     };
                 }
-                // Upsert: create new document (use insertOneLocked to avoid nested lock)
+                // Upsert：创建新文档（使用 insertOneLocked 避免嵌套锁）
+                // EN: Upsert: create new document (use insertOneLocked to avoid nested lock)
                 const newDoc = this.buildUpsertDocument(filter, update);
                 const insertResult = await this.insertOneLocked(newDoc);
                 return {
@@ -432,22 +498,22 @@ export class Collection implements DocumentFinder {
             const oldDoc = cloneBSONValue(doc) as BSONDocument;
             const updatedDoc = await this.applyUpdate(doc, update);
 
-            // Check unique constraints (excluding current document)
+            // 检查唯一约束（排除当前文档）// EN: Check unique constraints (excluding current document)
             await this.indexManager.checkUniqueConstraints(updatedDoc, oldDoc._id);
 
-            // Delete old index entries
+            // 删除旧的索引条目 // EN: Delete old index entries
             await this.indexManager.deleteDocument(oldDoc);
 
-            // Update data
+            // 更新数据 // EN: Update data
             const idKey = this.encodeId(doc._id);
             const encoded = this.encodeDocument(updatedDoc);
             await this.dataTree!.insert(idKey, encoded);
 
-            // Insert new index entries
+            // 插入新的索引条目 // EN: Insert new index entries
             try {
                 await this.indexManager.insertDocument(updatedDoc);
             } catch (err) {
-                // Rollback: restore old index entries
+                // 回滚：恢复旧的索引条目 // EN: Rollback: restore old index entries
                 try {
                     await this.indexManager.insertDocument(oldDoc);
                 } catch (rollbackErr) {
@@ -470,7 +536,8 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Replace a single document (public API with write lock)
+     * 替换单个文档（公共 API，带写锁）
+     * // EN: Replace a single document (public API with write lock)
      */
     async replaceOne(filter: BSONDocument, replacement: BSONDocument): Promise<UpdateResult> {
         return this.writeQueue.withLock(async () => {
@@ -485,26 +552,26 @@ export class Collection implements DocumentFinder {
 
             const oldDoc = cloneBSONValue(doc) as BSONDocument;
 
-            // Keep original _id
+            // 保留原始 _id // EN: Keep original _id
             const newDoc = cloneBSONValue(replacement) as BSONDocument;
             newDoc._id = doc._id;
 
-            // Check unique constraints (excluding current document)
+            // 检查唯一约束（排除当前文档）// EN: Check unique constraints (excluding current document)
             await this.indexManager.checkUniqueConstraints(newDoc, oldDoc._id);
 
-            // Delete old index entries
+            // 删除旧的索引条目 // EN: Delete old index entries
             await this.indexManager.deleteDocument(oldDoc);
 
-            // Update data
+            // 更新数据 // EN: Update data
             const idKey = this.encodeId(doc._id);
             const encoded = this.encodeDocument(newDoc);
             await this.dataTree!.insert(idKey, encoded);
 
-            // Insert new index entries
+            // 插入新的索引条目 // EN: Insert new index entries
             try {
                 await this.indexManager.insertDocument(newDoc);
             } catch (err) {
-                // Rollback: restore old index entries
+                // 回滚：恢复旧的索引条目 // EN: Rollback: restore old index entries
                 try {
                     await this.indexManager.insertDocument(oldDoc);
                 } catch (rollbackErr) {
@@ -526,12 +593,14 @@ export class Collection implements DocumentFinder {
         });
     }
 
-    // ==================== Delete Operations ====================
+    // ==================== 删除操作 / Delete Operations ====================
 
     /**
-     * Delete documents matching filter (public API with write lock)
+     * 删除匹配过滤条件的文档（公共 API，带写锁）
+     * // EN: Delete documents matching filter (public API with write lock)
      *
-     * P0 FIX: Delete indexes BEFORE data, with rollback on failure
+     * P0 修复：先删除索引再删除数据，失败时回滚
+     * // EN: P0 FIX: Delete indexes BEFORE data, with rollback on failure
      */
     async deleteMany(filter: BSONDocument): Promise<DeleteResult> {
         return this.writeQueue.withLock(async () => {
@@ -539,7 +608,7 @@ export class Collection implements DocumentFinder {
             let deletedCount = 0;
 
             for (const doc of docs) {
-                // P0 FIX: Delete from indexes first
+                // P0 修复：先从索引中删除 // EN: P0 FIX: Delete from indexes first
                 await this.indexManager.deleteDocument(doc);
 
                 const idKey = this.encodeId(doc._id);
@@ -550,7 +619,8 @@ export class Collection implements DocumentFinder {
                         this.info.documentCount--;
                     }
                 } catch (err) {
-                    // P0 CRITICAL FIX: Restore index entries on data delete failure
+                    // P0 关键修复：数据删除失败时恢复索引条目
+                    // EN: P0 CRITICAL FIX: Restore index entries on data delete failure
                     try {
                         await this.indexManager.insertDocument(doc);
                     } catch (rollbackErr) {
@@ -573,9 +643,11 @@ export class Collection implements DocumentFinder {
     }
 
     /**
-     * Delete a single document (public API with write lock)
+     * 删除单个文档（公共 API，带写锁）
+     * // EN: Delete a single document (public API with write lock)
      *
-     * P0 FIX: Delete indexes BEFORE data, with rollback on failure
+     * P0 修复：先删除索引再删除数据，失败时回滚
+     * // EN: P0 FIX: Delete indexes BEFORE data, with rollback on failure
      */
     async deleteOne(filter: BSONDocument): Promise<DeleteResult> {
         return this.writeQueue.withLock(async () => {
@@ -587,14 +659,15 @@ export class Collection implements DocumentFinder {
                 };
             }
 
-            // P0 FIX: Delete from indexes first
+            // P0 修复：先从索引中删除 // EN: P0 FIX: Delete from indexes first
             await this.indexManager.deleteDocument(doc);
 
             const idKey = this.encodeId(doc._id);
             try {
                 await this.dataTree!.delete(idKey);
             } catch (err) {
-                // P0 CRITICAL FIX: Restore index entries on data delete failure
+                // P0 关键修复：数据删除失败时恢复索引条目
+                // EN: P0 CRITICAL FIX: Restore index entries on data delete failure
                 try {
                     await this.indexManager.insertDocument(doc);
                 } catch (rollbackErr) {

@@ -8,39 +8,55 @@ import { MonoError } from '../core';
 import { logger } from '../core';
 
 /**
- * Index metadata (stored in catalog)
+ * 索引元数据（存储在目录中）
+ * // EN: Index metadata (stored in catalog)
  */
 export interface IndexMeta {
+    /** 索引名称 // EN: Index name */
     name: string;
+    /** 索引键 // EN: Index keys */
     keys: BSONDocument;
+    /** 是否唯一 // EN: Whether unique */
     unique: boolean;
+    /** 根页 ID // EN: Root page ID */
     rootPageId: number;
 }
 
 /**
- * Index information
+ * 索引信息
+ * // EN: Index information
  */
 export interface IndexInfo {
+    /** 索引名称 // EN: Index name */
     name: string;
+    /** 索引键 // EN: Index keys */
     keys: BSONDocument;
+    /** 是否唯一 // EN: Whether unique */
     unique: boolean;
+    /** 是否后台构建 // EN: Whether background build */
     background: boolean;
+    /** 根页 ID // EN: Root page ID */
     rootPageId?: number;
 }
 
 /**
- * Document finder interface (for building indexes)
+ * 文档查找器接口（用于构建索引）
+ * // EN: Document finder interface (for building indexes)
  */
 export interface DocumentFinder {
     findUnlocked(filter: BSONDocument | null): Promise<BSONDocument[]>;
 }
 
 /**
- * Index class - wraps a BTree for index operations
+ * 索引类 - 包装 B+ 树用于索引操作
+ * // EN: Index class - wraps a BTree for index operations
  */
 export class Index {
+    /** 索引信息 // EN: Index info */
     readonly info: IndexInfo;
+    /** B+ 树 // EN: B+ tree */
     private tree: BTree;
+    /** 页面管理器 // EN: Pager */
     private pager: Pager;
 
     constructor(pager: Pager, info: IndexInfo, tree: BTree) {
@@ -50,7 +66,8 @@ export class Index {
     }
 
     /**
-     * Create a new index with a fresh BTree
+     * 创建一个新的索引（使用新的 B+ 树）
+     * // EN: Create a new index with a fresh BTree
      */
     static async create(pager: Pager, info: IndexInfo): Promise<Index> {
         const tree = await BTree.create(pager);
@@ -59,7 +76,8 @@ export class Index {
     }
 
     /**
-     * Load an existing index from a root page
+     * 从根页加载现有索引
+     * // EN: Load an existing index from a root page
      */
     static load(pager: Pager, info: IndexInfo, rootPageId: number): Index {
         const tree = new BTree(pager, rootPageId);
@@ -68,17 +86,20 @@ export class Index {
     }
 
     /**
-     * Get root page ID
+     * 获取根页 ID
+     * // EN: Get root page ID
      */
     getRootPageId(): number {
         return this.tree.getRootPageId();
     }
 
     /**
-     * Insert a key-value pair
+     * 插入键值对
+     * // EN: Insert a key-value pair
      */
     async insert(key: Buffer, value: Buffer): Promise<void> {
-        // For unique indexes, check if key already exists
+        // 对于唯一索引，检查键是否已存在
+        // EN: For unique indexes, check if key already exists
         if (this.info.unique) {
             const existing = await this.tree.search(key);
             if (existing !== null) {
@@ -89,21 +110,24 @@ export class Index {
     }
 
     /**
-     * Delete a key
+     * 删除键
+     * // EN: Delete a key
      */
     async delete(key: Buffer): Promise<boolean> {
         return this.tree.delete(key);
     }
 
     /**
-     * Search for a key
+     * 搜索键
+     * // EN: Search for a key
      */
     async search(key: Buffer): Promise<Buffer | null> {
         return this.tree.search(key);
     }
 
     /**
-     * Range search
+     * 范围搜索
+     * // EN: Range search
      */
     async searchRange(startKey: Buffer | null, endKey: Buffer | null): Promise<Buffer[]> {
         return this.tree.searchRange(startKey, endKey);
@@ -111,19 +135,25 @@ export class Index {
 }
 
 /**
- * IndexManager - manages indexes for a collection (aligned with Go/Swift)
- * 
- * Features:
- * - Create/drop indexes
- * - Unique constraint checking
- * - Index maintenance on insert/update/delete
- * - Rollback support for consistency
+ * 索引管理器 - 管理集合的索引（与 Go/Swift 版本对齐）
+ * // EN: IndexManager - manages indexes for a collection (aligned with Go/Swift)
+ *
+ * 功能特性 // EN: Features:
+ * - 创建/删除索引 // EN: Create/drop indexes
+ * - 唯一约束检查 // EN: Unique constraint checking
+ * - 插入/更新/删除时的索引维护 // EN: Index maintenance on insert/update/delete
+ * - 支持回滚以保证一致性 // EN: Rollback support for consistency
  */
 export class IndexManager {
+    /** 页面管理器 // EN: Pager */
     private pager: Pager;
+    /** 索引映射表 // EN: Index map */
     private indexes: Map<string, Index> = new Map();
+    /** 文档查找器 // EN: Document finder */
     private documentFinder: DocumentFinder | null = null;
+    /** BSON 编码器 // EN: BSON encoder */
     private encoder: BSONEncoder;
+    /** BSON 解码器 // EN: BSON decoder */
     private decoder: BSONDecoder;
 
     constructor(pager: Pager) {
@@ -133,34 +163,36 @@ export class IndexManager {
     }
 
     /**
-     * Set document finder for index building
+     * 设置文档查找器用于构建索引
+     * // EN: Set document finder for index building
      */
     setDocumentFinder(finder: DocumentFinder): void {
         this.documentFinder = finder;
     }
 
-    // ==================== Index Creation & Deletion ====================
+    // ==================== 索引创建与删除 / Index Creation & Deletion ====================
 
     /**
-     * Create an index
+     * 创建索引
+     * // EN: Create an index
      */
     async createIndex(keys: BSONDocument, options: BSONDocument = {}): Promise<string> {
-        // Generate index name
+        // 生成索引名称 // EN: Generate index name
         let name = this.generateIndexName(keys);
         if (options.name && typeof options.name === 'string') {
             name = options.name;
         }
 
-        // Check if already exists
+        // 检查是否已存在 // EN: Check if already exists
         if (this.indexes.has(name)) {
-            return name; // Already exists
+            return name; // 已存在 // EN: Already exists
         }
 
-        // Parse options
+        // 解析选项 // EN: Parse options
         const unique = options.unique === true;
         const background = options.background === true;
 
-        // Create index info
+        // 创建索引信息 // EN: Create index info
         const info: IndexInfo = {
             name,
             keys,
@@ -168,11 +200,11 @@ export class IndexManager {
             background,
         };
 
-        // Create index
+        // 创建索引 // EN: Create index
         const index = await Index.create(this.pager, info);
         this.indexes.set(name, index);
 
-        // Build index for existing documents
+        // 为现有文档构建索引 // EN: Build index for existing documents
         await this.buildIndex(index);
 
         logger.info('Index created', { name, keys, unique });
@@ -180,7 +212,8 @@ export class IndexManager {
     }
 
     /**
-     * Build index for existing documents
+     * 为现有文档构建索引
+     * // EN: Build index for existing documents
      */
     private async buildIndex(index: Index): Promise<void> {
         if (!this.documentFinder) return;
@@ -208,7 +241,8 @@ export class IndexManager {
     }
 
     /**
-     * Drop an index
+     * 删除索引
+     * // EN: Drop an index
      */
     async dropIndex(name: string): Promise<void> {
         if (name === '_id_') {
@@ -224,19 +258,20 @@ export class IndexManager {
     }
 
     /**
-     * List all indexes
+     * 列出所有索引
+     * // EN: List all indexes
      */
     listIndexes(): BSONDocument[] {
         const result: BSONDocument[] = [];
 
-        // Add default _id index
+        // 添加默认 _id 索引 // EN: Add default _id index
         result.push({
             name: '_id_',
             key: { _id: 1 },
             v: 2,
         });
 
-        // Add user indexes (sorted by name for stability)
+        // 添加用户索引（按名称排序以保持稳定） // EN: Add user indexes (sorted by name for stability)
         const names = Array.from(this.indexes.keys()).sort();
         for (const name of names) {
             const index = this.indexes.get(name)!;
@@ -252,14 +287,16 @@ export class IndexManager {
     }
 
     /**
-     * Get index by name
+     * 根据名称获取索引
+     * // EN: Get index by name
      */
     getIndex(name: string): Index | null {
         return this.indexes.get(name) ?? null;
     }
 
     /**
-     * Get all index metas for persistence
+     * 获取所有索引元数据用于持久化
+     * // EN: Get all index metas for persistence
      */
     getIndexMetas(): IndexMeta[] {
         const metas: IndexMeta[] = [];
@@ -274,14 +311,16 @@ export class IndexManager {
         return metas;
     }
 
-    // ==================== Unique Constraint Checking ====================
+    // ==================== 唯一约束检查 / Unique Constraint Checking ====================
 
     /**
-     * Check unique constraints for a document
-     * Returns error if document would violate any unique constraint
-     * 
-     * @param doc Document to check
-     * @param excludingId If provided, exclude this _id from duplicate check (for updates)
+     * 检查文档的唯一约束
+     * 如果文档违反任何唯一约束则返回错误
+     * // EN: Check unique constraints for a document
+     * // EN: Returns error if document would violate any unique constraint
+     *
+     * @param doc 要检查的文档 // EN: Document to check
+     * @param excludingId 如果提供，则在重复检查中排除此 _id（用于更新） // EN: If provided, exclude this _id from duplicate check (for updates)
      */
     async checkUniqueConstraints(doc: BSONDocument, excludingId?: BSONValue): Promise<void> {
         for (const index of this.indexes.values()) {
@@ -290,14 +329,14 @@ export class IndexManager {
             const key = this.encodeIndexEntryKey(index, doc);
             if (!key) continue;
 
-            // Check if key already exists
+            // 检查键是否已存在 // EN: Check if key already exists
             const existing = await index.search(key);
             if (existing !== null) {
-                // If excludingId provided, check if it's the same document
+                // 如果提供了 excludingId，检查是否是同一个文档 // EN: If excludingId provided, check if it's the same document
                 if (excludingId !== undefined) {
                     const existingId = this.decodeIdValue(existing);
                     if (existingId !== undefined && this.valuesEqual(existingId, excludingId)) {
-                        continue; // Same document, OK
+                        continue; // 同一文档，允许 // EN: Same document, OK
                     }
                 }
                 throw MonoError.duplicateKey(index.info.name, key);
@@ -305,16 +344,18 @@ export class IndexManager {
         }
     }
 
-    // ==================== Document Index Operations ====================
+    // ==================== 文档索引操作 / Document Index Operations ====================
 
     /**
-     * Insert document into all indexes
-     * 
-     * P0 FIX: Includes rollback support - if any index fails, previously
-     * successful entries are rolled back
+     * 将文档插入所有索引
+     * // EN: Insert document into all indexes
+     *
+     * P0 修复：支持回滚 - 如果任何索引失败，之前成功的条目将被回滚
+     * // EN: P0 FIX: Includes rollback support - if any index fails, previously
+     * // EN: successful entries are rolled back
      */
     async insertDocument(doc: BSONDocument): Promise<void> {
-        // Track successful inserts for rollback
+        // 跟踪成功的插入以便回滚 // EN: Track successful inserts for rollback
         const insertedEntries: Array<{ index: Index; key: Buffer }> = [];
 
         for (const index of this.indexes.values()) {
@@ -330,7 +371,7 @@ export class IndexManager {
                 await index.insert(key, idBytes);
                 insertedEntries.push({ index, key });
             } catch (err) {
-                // P0 CRITICAL FIX: Rollback all successful inserts
+                // P0 关键修复：回滚所有成功的插入 // EN: P0 CRITICAL FIX: Rollback all successful inserts
                 for (let i = insertedEntries.length - 1; i >= 0; i--) {
                     const entry = insertedEntries[i];
                     try {
@@ -348,16 +389,18 @@ export class IndexManager {
     }
 
     /**
-     * Delete document from all indexes
-     * 
-     * P0 FIX: Includes rollback support - if any delete fails, previously
-     * successful deletes are restored
+     * 从所有索引中删除文档
+     * // EN: Delete document from all indexes
+     *
+     * P0 修复：支持回滚 - 如果任何删除失败，之前成功的删除将被恢复
+     * // EN: P0 FIX: Includes rollback support - if any delete fails, previously
+     * // EN: successful deletes are restored
      */
     async deleteDocument(doc: BSONDocument): Promise<void> {
-        // Track successful deletes for rollback
+        // 跟踪成功的删除以便回滚 // EN: Track successful deletes for rollback
         const deletedEntries: Array<{ index: Index; key: Buffer; idBytes: Buffer }> = [];
 
-        // Pre-fetch _id
+        // 预取 _id // EN: Pre-fetch _id
         const idVal = this.getDocField(doc, '_id');
         let idBytes: Buffer | null = null;
         if (idVal !== undefined) {
@@ -374,7 +417,7 @@ export class IndexManager {
                     deletedEntries.push({ index, key, idBytes });
                 }
             } catch (err) {
-                // P0 CRITICAL FIX: Rollback all successful deletes (re-insert)
+                // P0 关键修复：回滚所有成功的删除（重新插入） // EN: P0 CRITICAL FIX: Rollback all successful deletes (re-insert)
                 for (let i = deletedEntries.length - 1; i >= 0; i--) {
                     const entry = deletedEntries[i];
                     try {
@@ -392,18 +435,21 @@ export class IndexManager {
     }
 
     /**
-     * Atomic operation: check unique constraints + insert document
-     * Used for Collection.insert to ensure consistency
+     * 原子操作：检查唯一约束 + 插入文档
+     * 用于 Collection.insert 以确保一致性
+     * // EN: Atomic operation: check unique constraints + insert document
+     * // EN: Used for Collection.insert to ensure consistency
      */
     async checkAndInsertDocument(doc: BSONDocument, excludingId?: BSONValue): Promise<void> {
         await this.checkUniqueConstraints(doc, excludingId);
         await this.insertDocument(doc);
     }
 
-    // ==================== Index Restoration ====================
+    // ==================== 索引恢复 / Index Restoration ====================
 
     /**
-     * Restore indexes from persisted metadata
+     * 从持久化的元数据恢复索引
+     * // EN: Restore indexes from persisted metadata
      */
     async restoreIndexes(metas: IndexMeta[]): Promise<void> {
         for (const meta of metas) {
@@ -419,10 +465,11 @@ export class IndexManager {
         }
     }
 
-    // ==================== Helper Methods ====================
+    // ==================== 辅助方法 / Helper Methods ====================
 
     /**
-     * Generate index name from keys (e.g., "field1_1_field2_-1")
+     * 从键生成索引名称（例如 "field1_1_field2_-1"）
+     * // EN: Generate index name from keys (e.g., "field1_1_field2_-1")
      */
     private generateIndexName(keys: BSONDocument): string {
         const parts: string[] = [];
@@ -434,13 +481,17 @@ export class IndexManager {
     }
 
     /**
-     * Encode index entry key
-     * 
-     * For unique indexes: key = KeyString(fields)
-     * For non-unique indexes: key = KeyString(fields) + 0x00 + BSON(_id)
-     * 
-     * This ensures non-unique indexes can still have duplicate field values
-     * while maintaining B+Tree uniqueness via the appended _id
+     * 编码索引条目键
+     * // EN: Encode index entry key
+     *
+     * 对于唯一索引：key = KeyString(fields)
+     * 对于非唯一索引：key = KeyString(fields) + 0x00 + BSON(_id)
+     * // EN: For unique indexes: key = KeyString(fields)
+     * // EN: For non-unique indexes: key = KeyString(fields) + 0x00 + BSON(_id)
+     *
+     * 这确保非唯一索引可以有重复的字段值，同时通过附加 _id 来维护 B+ 树的唯一性
+     * // EN: This ensures non-unique indexes can still have duplicate field values
+     * // EN: while maintaining B+Tree uniqueness via the appended _id
      */
     private encodeIndexEntryKey(index: Index, doc: BSONDocument): Buffer | null {
         const values: any[] = [];
@@ -449,7 +500,7 @@ export class IndexManager {
         for (const [field, direction] of Object.entries(index.info.keys)) {
             const value = this.getDocField(doc, field);
             if (value === undefined) {
-                // Treat missing fields as null for indexing
+                // 将缺失字段视为 null 进行索引 // EN: Treat missing fields as null for indexing
                 values.push(null);
             } else {
                 values.push(value);
@@ -466,7 +517,7 @@ export class IndexManager {
             return base;
         }
 
-        // For non-unique indexes, append _id to ensure uniqueness
+        // 对于非唯一索引，附加 _id 以确保唯一性 // EN: For non-unique indexes, append _id to ensure uniqueness
         const idVal = this.getDocField(doc, '_id');
         if (idVal === undefined) {
             return base;
@@ -475,14 +526,15 @@ export class IndexManager {
         const idBytes = this.encoder.encode({ _id: idVal });
         const key = Buffer.alloc(base.length + 1 + idBytes.length);
         base.copy(key, 0);
-        key[base.length] = 0x00; // Separator
+        key[base.length] = 0x00; // 分隔符 // EN: Separator
         idBytes.copy(key, base.length + 1);
 
         return key;
     }
 
     /**
-     * Get field value from document (supports dot notation)
+     * 从文档获取字段值（支持点符号表示法）
+     * // EN: Get field value from document (supports dot notation)
      */
     private getDocField(doc: BSONDocument, path: string): BSONValue | undefined {
         const parts = path.split('.');
@@ -495,12 +547,12 @@ export class IndexManager {
             if (typeof current === 'object' && !Array.isArray(current)) {
                 current = current[part];
             } else if (Array.isArray(current)) {
-                // Try array index
+                // 尝试数组索引 // EN: Try array index
                 const index = parseInt(part, 10);
                 if (!isNaN(index) && index >= 0 && index < current.length) {
                     current = current[index];
                 } else {
-                    // Array element matching (MongoDB semantics)
+                    // 数组元素匹配（MongoDB 语义） // EN: Array element matching (MongoDB semantics)
                     for (const item of current) {
                         if (typeof item === 'object' && item !== null) {
                             const result = this.getDocField(item as BSONDocument, parts.slice(parts.indexOf(part)).join('.'));
@@ -520,7 +572,8 @@ export class IndexManager {
     }
 
     /**
-     * Decode _id value from BSON bytes
+     * 从 BSON 字节解码 _id 值
+     * // EN: Decode _id value from BSON bytes
      */
     private decodeIdValue(data: Buffer): BSONValue | undefined {
         try {
@@ -532,7 +585,8 @@ export class IndexManager {
     }
 
     /**
-     * Check if two BSON values are equal
+     * 检查两个 BSON 值是否相等
+     * // EN: Check if two BSON values are equal
      */
     private valuesEqual(a: BSONValue, b: BSONValue): boolean {
         if (a === b) return true;
@@ -549,15 +603,17 @@ export class IndexManager {
             return a.equals(b);
         }
 
-        // For other types, compare JSON representations
+        // 对于其他类型，比较 JSON 表示 // EN: For other types, compare JSON representations
         return JSON.stringify(a) === JSON.stringify(b);
     }
 
-    // ==================== Validation Methods (aligned with Go/Swift) ====================
+    // ==================== 验证方法 / Validation Methods (aligned with Go/Swift) ====================
 
     /**
-     * Validate index integrity
-     * Returns array of error messages, empty if valid
+     * 验证索引完整性
+     * 返回错误消息数组，如果有效则为空
+     * // EN: Validate index integrity
+     * // EN: Returns array of error messages, empty if valid
      */
     async validateIndex(name: string): Promise<string[]> {
         const index = this.indexes.get(name);
@@ -565,7 +621,7 @@ export class IndexManager {
             return [`Index '${name}' not found`];
         }
 
-        // Get the underlying BTree and verify it
+        // 获取底层 B+ 树并验证 // EN: Get the underlying BTree and verify it
         const tree = (index as any).tree as BTree;
         if (tree && typeof tree.verify === 'function') {
             return tree.verify();
@@ -575,8 +631,10 @@ export class IndexManager {
     }
 
     /**
-     * Find documents by index hint
-     * Returns matching document _ids from the index
+     * 根据索引提示查找文档
+     * 返回索引中匹配的文档 _id
+     * // EN: Find documents by index hint
+     * // EN: Returns matching document _ids from the index
      */
     async findByIndexHint(indexName: string, query: BSONDocument): Promise<BSONValue[]> {
         const index = this.indexes.get(indexName);
@@ -584,7 +642,7 @@ export class IndexManager {
             return [];
         }
 
-        // Build key from query values
+        // 从查询值构建键 // EN: Build key from query values
         const values: any[] = [];
         const directions: boolean[] = [];
 
@@ -592,7 +650,7 @@ export class IndexManager {
             if (field in query) {
                 values.push(query[field]);
             } else {
-                // If query doesn't have the field, cannot use index efficiently
+                // 如果查询没有该字段，则无法有效使用索引 // EN: If query doesn't have the field, cannot use index efficiently
                 return [];
             }
             directions.push((direction as number) >= 0);
@@ -603,7 +661,7 @@ export class IndexManager {
             return [];
         }
 
-        // For unique indexes, use exact search
+        // 对于唯一索引，使用精确搜索 // EN: For unique indexes, use exact search
         if (index.info.unique) {
             const result = await index.search(key);
             if (result) {
@@ -615,15 +673,15 @@ export class IndexManager {
             return [];
         }
 
-        // For non-unique indexes, use range search with prefix
+        // 对于非唯一索引，使用带前缀的范围搜索 // EN: For non-unique indexes, use range search with prefix
         const results = await index.searchRange(key, null);
         const ids: BSONValue[] = [];
 
         for (const result of results) {
-            // Check if result starts with the key (prefix match)
-            // Non-unique index keys have format: key + 0x00 + _id
+            // 检查结果是否以键开头（前缀匹配） // EN: Check if result starts with the key (prefix match)
+            // 非唯一索引键的格式为：key + 0x00 + _id // EN: Non-unique index keys have format: key + 0x00 + _id
             if (result.length < key.length + 2) continue;
-            
+
             if (result.subarray(0, key.length).equals(key) && result[key.length] === 0x00) {
                 const idBytes = result.subarray(key.length + 1);
                 const idVal = this.decodeIdValue(idBytes);

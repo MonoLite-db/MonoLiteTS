@@ -6,37 +6,55 @@ import { Logger } from '../core/logger';
 import { Transaction, TransactionManager, TxnState, TxnStateType } from './transaction';
 
 /**
- * Session states
+ * 会话状态
+ * // EN: Session states
  */
 export const SessionState = {
+    /** 活动中 // EN: Active */
     Active: 0,
+    /** 已结束 // EN: Ended */
     Ended: 1,
 } as const;
 
 export type SessionStateType = typeof SessionState[keyof typeof SessionState];
 
 /**
- * Session transaction
+ * 会话事务
+ * // EN: Session transaction
  */
 export interface SessionTransaction {
+    /** 事务编号 // EN: Transaction number */
     txnNumber: bigint;
+    /** 状态 // EN: State */
     state: TxnStateType;
+    /** 开始时间 // EN: Start time */
     startTime: Date;
+    /** 是否自动提交 // EN: Auto commit */
     autoCommit: boolean;
+    /** 底层事务 // EN: Underlying transaction */
     transaction: Transaction | null;
+    /** 操作数 // EN: Operation count */
     operations: number;
+    /** 读关注级别 // EN: Read concern level */
     readConcern: string;
+    /** 写关注级别 // EN: Write concern level */
     writeConcern: string;
 }
 
 /**
- * MongoDB logical session
+ * MongoDB 逻辑会话
+ * // EN: MongoDB logical session
  */
 export class Session {
+    /** 会话 ID // EN: Session ID */
     id: Binary;
+    /** 最后使用时间 // EN: Last used time */
     lastUsed: Date;
+    /** 状态 // EN: State */
     state: SessionStateType = SessionState.Active;
+    /** 当前事务 // EN: Current transaction */
     currentTxn: SessionTransaction | null = null;
+    /** 已使用的事务编号 // EN: Used transaction number */
     txnNumberUsed: bigint = -1n;
 
     constructor(id: Binary) {
@@ -45,7 +63,8 @@ export class Session {
     }
 
     /**
-     * Update last used time
+     * 更新最后使用时间
+     * // EN: Update last used time
      */
     touch(): void {
         this.lastUsed = new Date();
@@ -53,15 +72,19 @@ export class Session {
 }
 
 /**
- * Session options
+ * 会话选项
+ * // EN: Session options
  */
 export interface SessionOptions {
+    /** 默认超时时间 // EN: Default timeout */
     defaultTimeout?: number;
+    /** 因果一致性 // EN: Causal consistency */
     causalConsistency?: boolean;
 }
 
 /**
- * Database interface for session manager
+ * 数据库接口（用于会话管理器）
+ * // EN: Database interface for session manager
  */
 interface DatabaseLike {
     txnManager?: TransactionManager | null;
@@ -69,29 +92,36 @@ interface DatabaseLike {
 }
 
 /**
- * Session Manager
+ * 会话管理器
+ * // EN: Session Manager
  */
 export class SessionManager {
+    /** 会话映射表 // EN: Sessions map */
     private sessions: Map<string, Session> = new Map();
+    /** 数据库引用 // EN: Database reference */
     private db: DatabaseLike;
-    private sessionTTL: number = 30 * 60 * 1000; // 30 minutes
+    /** 会话 TTL（30 分钟） // EN: Session TTL (30 minutes) */
+    private sessionTTL: number = 30 * 60 * 1000;
+    /** 清理定时器 // EN: Cleanup timer */
     private cleanupInterval: NodeJS.Timeout | null = null;
+    /** 是否已停止 // EN: Whether stopped */
     private stopped: boolean = false;
 
     constructor(db: DatabaseLike) {
         this.db = db;
 
-        // Start cleanup timer
+        // 启动清理定时器 // EN: Start cleanup timer
         this.cleanupInterval = setInterval(() => {
             this.cleanupExpiredSessions();
-        }, 5 * 60 * 1000); // Every 5 minutes
+        }, 5 * 60 * 1000); // 每 5 分钟 // EN: Every 5 minutes
     }
 
     /**
-     * Get or create a session
+     * 获取或创建会话
+     * // EN: Get or create a session
      */
     getOrCreateSession(lsid: BSONDocument): Session {
-        // Extract id from lsid
+        // 从 lsid 中提取 id // EN: Extract id from lsid
         const sessionId = lsid.id as Binary | undefined;
         if (!sessionId || !(sessionId instanceof Binary)) {
             throw MonoError.fromCode(ErrorCodes.BadValue, 'lsid.id is required');
@@ -105,7 +135,7 @@ export class SessionManager {
             return session;
         }
 
-        // Create new session
+        // 创建新会话 // EN: Create new session
         session = new Session(sessionId);
         this.sessions.set(key, session);
 
@@ -113,7 +143,8 @@ export class SessionManager {
     }
 
     /**
-     * End a session
+     * 结束会话
+     * // EN: End a session
      */
     endSession(lsid: BSONDocument): void {
         const sessionId = lsid.id as Binary | undefined;
@@ -125,7 +156,7 @@ export class SessionManager {
         const session = this.sessions.get(key);
 
         if (session) {
-            // Abort active transaction if present
+            // 如果有活动事务则终止 // EN: Abort active transaction if present
             if (session.currentTxn && session.currentTxn.state === TxnState.Active) {
                 if (session.currentTxn.transaction && this.db.txnManager) {
                     this.db.txnManager.abort(session.currentTxn.transaction).catch(() => {});
@@ -138,7 +169,8 @@ export class SessionManager {
     }
 
     /**
-     * Refresh session (extend timeout)
+     * 刷新会话（延长超时）
+     * // EN: Refresh session (extend timeout)
      */
     refreshSession(lsid: BSONDocument): void {
         const sessionId = lsid.id as Binary | undefined;
@@ -157,26 +189,27 @@ export class SessionManager {
     }
 
     /**
-     * Start transaction in session
+     * 在会话中启动事务
+     * // EN: Start transaction in session
      */
     startTransaction(session: Session, txnNumber: bigint, readConcern: string, writeConcern: string): void {
         if (session.state !== SessionState.Active) {
             throw MonoError.fromCode(ErrorCodes.NoSuchSession, 'session has ended');
         }
 
-        // Validate txnNumber
+        // 验证事务编号 // EN: Validate txnNumber
         if (txnNumber <= session.txnNumberUsed) {
             throw MonoError.fromCode(ErrorCodes.TransactionTooOld, 'txnNumber is too old');
         }
 
-        // Abort any in-progress transaction
+        // 终止任何进行中的事务 // EN: Abort any in-progress transaction
         if (session.currentTxn && session.currentTxn.state === TxnState.Active) {
             if (session.currentTxn.transaction && this.db.txnManager) {
                 this.db.txnManager.abort(session.currentTxn.transaction).catch(() => {});
             }
         }
 
-        // Create underlying transaction
+        // 创建底层事务 // EN: Create underlying transaction
         let txn: Transaction | null = null;
         if (this.db.txnManager) {
             txn = this.db.txnManager.begin();
@@ -197,27 +230,28 @@ export class SessionManager {
     }
 
     /**
-     * Commit transaction in session
+     * 在会话中提交事务
+     * // EN: Commit transaction in session
      */
     async commitTransaction(session: Session, txnNumber: bigint): Promise<void> {
         if (!session.currentTxn) {
             throw MonoError.fromCode(ErrorCodes.NoSuchTransaction, 'no transaction in progress');
         }
 
-        // Must match txnNumber
+        // 必须匹配事务编号 // EN: Must match txnNumber
         if (session.currentTxn.txnNumber !== txnNumber) {
             throw MonoError.fromCode(ErrorCodes.NoSuchTransaction, 'transaction number mismatch');
         }
 
         if (session.currentTxn.state !== TxnState.Active) {
             if (session.currentTxn.state === TxnState.Committed) {
-                // Repeated commit is allowed (idempotent)
+                // 允许重复提交（幂等） // EN: Repeated commit is allowed (idempotent)
                 return;
             }
             throw MonoError.fromCode(ErrorCodes.TransactionAborted, 'transaction has been aborted');
         }
 
-        // Commit underlying transaction
+        // 提交底层事务 // EN: Commit underlying transaction
         if (session.currentTxn.transaction && this.db.txnManager) {
             await this.db.txnManager.commit(session.currentTxn.transaction);
         }
@@ -227,27 +261,28 @@ export class SessionManager {
     }
 
     /**
-     * Abort transaction in session
+     * 在会话中终止事务
+     * // EN: Abort transaction in session
      */
     async abortTransaction(session: Session, txnNumber: bigint): Promise<void> {
         if (!session.currentTxn) {
             throw MonoError.fromCode(ErrorCodes.NoSuchTransaction, 'no transaction in progress');
         }
 
-        // Must match txnNumber
+        // 必须匹配事务编号 // EN: Must match txnNumber
         if (session.currentTxn.txnNumber !== txnNumber) {
             throw MonoError.fromCode(ErrorCodes.NoSuchTransaction, 'transaction number mismatch');
         }
 
         if (session.currentTxn.state !== TxnState.Active) {
             if (session.currentTxn.state === TxnState.Aborted) {
-                // Repeated abort is allowed (idempotent)
+                // 允许重复终止（幂等） // EN: Repeated abort is allowed (idempotent)
                 return;
             }
             throw MonoError.fromCode(ErrorCodes.TransactionCommitted, 'transaction has been committed');
         }
 
-        // Abort underlying transaction
+        // 终止底层事务 // EN: Abort underlying transaction
         if (session.currentTxn.transaction && this.db.txnManager) {
             await this.db.txnManager.abort(session.currentTxn.transaction);
         }
@@ -257,7 +292,8 @@ export class SessionManager {
     }
 
     /**
-     * Get active transaction for session
+     * 获取会话的活动事务
+     * // EN: Get active transaction for session
      */
     getActiveTransaction(session: Session, txnNumber: bigint): SessionTransaction {
         if (!session.currentTxn) {
@@ -279,16 +315,17 @@ export class SessionManager {
     }
 
     /**
-     * Cleanup expired sessions
+     * 清理过期会话
+     * // EN: Cleanup expired sessions
      */
     private cleanupExpiredSessions(): void {
         const now = Date.now();
         const expiredKeys: string[] = [];
 
-        // Collect expired sessions
+        // 收集过期的会话 // EN: Collect expired sessions
         for (const [key, session] of this.sessions) {
             if (now - session.lastUsed.getTime() > this.sessionTTL) {
-                // Abort active transaction
+                // 终止活动事务 // EN: Abort active transaction
                 if (session.currentTxn && session.currentTxn.state === TxnState.Active) {
                     if (session.currentTxn.transaction && this.db.txnManager) {
                         this.db.txnManager.abort(session.currentTxn.transaction).catch(() => {});
@@ -299,7 +336,7 @@ export class SessionManager {
             }
         }
 
-        // Remove expired sessions
+        // 移除过期的会话 // EN: Remove expired sessions
         if (expiredKeys.length > 0) {
             for (const key of expiredKeys) {
                 this.sessions.delete(key);
@@ -310,7 +347,8 @@ export class SessionManager {
     }
 
     /**
-     * Close session manager
+     * 关闭会话管理器
+     * // EN: Close session manager
      */
     close(): void {
         if (this.stopped) {
@@ -323,7 +361,7 @@ export class SessionManager {
             this.cleanupInterval = null;
         }
 
-        // Abort all active transactions
+        // 终止所有活动事务 // EN: Abort all active transactions
         for (const session of this.sessions.values()) {
             if (session.currentTxn && session.currentTxn.state === TxnState.Active) {
                 if (session.currentTxn.transaction && this.db.txnManager) {
@@ -337,14 +375,16 @@ export class SessionManager {
     }
 
     /**
-     * Get active session count
+     * 获取活动会话数量
+     * // EN: Get active session count
      */
     getActiveSessionCount(): number {
         return this.sessions.size;
     }
 
     /**
-     * Convert session ID to map key
+     * 将会话 ID 转换为映射键
+     * // EN: Convert session ID to map key
      */
     private sessionIdToKey(id: Binary): string {
         return Buffer.from(id.buffer).toString('hex');
@@ -352,20 +392,29 @@ export class SessionManager {
 }
 
 /**
- * Command context (contains session and transaction info)
+ * 命令上下文（包含会话和事务信息）
+ * // EN: Command context (contains session and transaction info)
  */
 export interface CommandContext {
+    /** 会话 // EN: Session */
     session: Session | null;
+    /** 会话事务 // EN: Session transaction */
     sessionTxn: SessionTransaction | null;
+    /** 事务编号 // EN: Transaction number */
     txnNumber: bigint;
+    /** 是否自动提交 // EN: Auto commit */
     autoCommit: boolean | null;
+    /** 是否启动事务 // EN: Start transaction flag */
     startTxn: boolean;
+    /** 读关注级别 // EN: Read concern level */
     readConcern: string;
+    /** 写关注级别 // EN: Write concern level */
     writeConcern: string;
 }
 
 /**
- * Extract command context from command
+ * 从命令中提取命令上下文
+ * // EN: Extract command context from command
  */
 export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): CommandContext {
     const ctx: CommandContext = {
@@ -381,7 +430,7 @@ export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): Co
     let lsid: BSONDocument | null = null;
     let hasTxnNumber = false;
 
-    // Extract fields from command
+    // 从命令中提取字段 // EN: Extract fields from command
     if (cmd.lsid && typeof cmd.lsid === 'object') {
         lsid = cmd.lsid as BSONDocument;
     }
@@ -405,7 +454,7 @@ export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): Co
         ctx.startTxn = cmd.startTransaction;
     }
 
-    // Extract readConcern
+    // 提取 readConcern // EN: Extract readConcern
     if (cmd.readConcern && typeof cmd.readConcern === 'object') {
         const rc = cmd.readConcern as BSONDocument;
         if (typeof rc.level === 'string') {
@@ -413,7 +462,7 @@ export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): Co
         }
     }
 
-    // Extract writeConcern
+    // 提取 writeConcern // EN: Extract writeConcern
     if (cmd.writeConcern && typeof cmd.writeConcern === 'object') {
         const wc = cmd.writeConcern as BSONDocument;
         if (typeof wc.w === 'string') {
@@ -423,22 +472,22 @@ export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): Co
         }
     }
 
-    // Get or create session if lsid is present
+    // 如果存在 lsid，获取或创建会话 // EN: Get or create session if lsid is present
     if (lsid) {
         const session = sm.getOrCreateSession(lsid);
         ctx.session = session;
 
-        // Handle transaction fields
+        // 处理事务字段 // EN: Handle transaction fields
         if (hasTxnNumber) {
             if (ctx.startTxn) {
-                // Start new transaction
+                // 启动新事务 // EN: Start new transaction
                 if (ctx.autoCommit !== false) {
                     throw MonoError.fromCode(ErrorCodes.BadValue, 'autocommit must be false for multi-document transactions');
                 }
                 sm.startTransaction(session, ctx.txnNumber, ctx.readConcern, ctx.writeConcern);
             }
 
-            // Get current transaction
+            // 获取当前事务 // EN: Get current transaction
             if (ctx.autoCommit === false) {
                 ctx.sessionTxn = sm.getActiveTransaction(session, ctx.txnNumber);
             }
@@ -449,14 +498,16 @@ export function extractCommandContext(sm: SessionManager, cmd: BSONDocument): Co
 }
 
 /**
- * Check if command context is in transaction
+ * 检查命令上下文是否在事务中
+ * // EN: Check if command context is in transaction
  */
 export function isInTransaction(ctx: CommandContext): boolean {
     return ctx.sessionTxn !== null && ctx.sessionTxn.state === TxnState.Active;
 }
 
 /**
- * Get underlying transaction from context
+ * 从上下文获取底层事务
+ * // EN: Get underlying transaction from context
  */
 export function getTransaction(ctx: CommandContext): Transaction | null {
     if (ctx.sessionTxn) {
@@ -466,7 +517,8 @@ export function getTransaction(ctx: CommandContext): Transaction | null {
 }
 
 /**
- * Record operation in transaction
+ * 在事务中记录操作
+ * // EN: Record operation in transaction
  */
 export function recordOperationInTxn(
     ctx: CommandContext,
